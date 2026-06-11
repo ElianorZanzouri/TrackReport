@@ -1,15 +1,42 @@
+import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
+import { syncAll } from '../sync'
 
-// Shared layout for all pages in the signed-in app:
-// the top navigation bar, then the page content from <Outlet>.
+// Mise en page commune : barre de navigation, bandeau hors ligne, puis le contenu.
 export default function Layout() {
+  const [online, setOnline] = useState(navigator.onLine)
+
+  useEffect(() => {
+    // Au démarrage : on remonte les écritures en attente, puis on rafraîchit le local.
+    syncAll()
+
+    const goOnline = () => {
+      setOnline(true)
+      syncAll() // au retour du réseau : on synchronise dans les deux sens
+    }
+    const goOffline = () => setOnline(false)
+    window.addEventListener('online', goOnline)
+    window.addEventListener('offline', goOffline)
+    return () => {
+      window.removeEventListener('online', goOnline)
+      window.removeEventListener('offline', goOffline)
+    }
+  }, [])
+
   const linkClass = ({ isActive }: { isActive: boolean }) =>
     isActive ? 'trl-link trl-link-on' : 'trl-link'
 
   return (
     <div className="trl-root">
       <style>{CSS}</style>
+
+      {!online && (
+        <div className="trl-offline">
+          Hors ligne — vous consultez des données enregistrées. Les
+          modifications nécessitent une connexion.
+        </div>
+      )}
 
       <header className="trl-nav">
         <Link to="/" className="trl-brand">
@@ -24,21 +51,21 @@ export default function Layout() {
 
         <nav className="trl-links">
           <NavLink to="/" end className={linkClass}>
-            Applications
+            Candidatures
           </NavLink>
-          <NavLink to="/companies" className={linkClass}>
-            Companies
+          <NavLink to="/entreprises" className={linkClass}>
+            Entreprises
           </NavLink>
           <NavLink to="/questions" className={linkClass}>
             Questions
           </NavLink>
-          <NavLink to="/profile" className={linkClass}>
-            Profile
+          <NavLink to="/profil" className={linkClass}>
+            Profil
           </NavLink>
         </nav>
 
         <button className="trl-signout" onClick={() => supabase.auth.signOut()}>
-          Sign out
+          Se déconnecter
         </button>
       </header>
 
@@ -52,8 +79,6 @@ export default function Layout() {
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Space+Mono:wght@400;700&display=swap');
 
-/* Design variables are defined here and inherited by all
-   pages rendered inside <Outlet> (Profile, Applications, etc.). */
 .trl-root{
   --paper:#FBFBF8;
   --panel:#FFFFFF;
@@ -75,6 +100,12 @@ const CSS = `
   -webkit-font-smoothing:antialiased;
 }
 .trl-root *{box-sizing:border-box;}
+
+.trl-offline{
+  background:#FEF3C7;color:#92400E;text-align:center;
+  font-size:.85rem;font-weight:500;padding:8px 16px;
+  border-bottom:1px solid #FDE68A;
+}
 
 .trl-nav{
   max-width:880px;margin:0 auto;padding:20px 24px;

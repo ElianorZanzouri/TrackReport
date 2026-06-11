@@ -11,11 +11,8 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      // Le service worker se met à jour tout seul quand tu déploies une nouvelle version.
       registerType: 'autoUpdate',
-      // Fichiers à inclure dans le cache en plus de ceux générés par le build.
       includeAssets: ['apple-touch-icon.png', 'favicon-32.png'],
-      // Le manifeste : c'est lui qui rend l'app installable.
       manifest: {
         name: 'TrackReport',
         short_name: 'TrackReport',
@@ -36,12 +33,49 @@ export default defineConfig({
           },
         ],
       },
-      // Mise en cache de l'app (le "shell") pour qu'elle se charge hors ligne.
       workbox: {
+        // Mise en cache de l'app elle-même (interface).
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         navigateFallback: '/index.html',
+
+        // Mise en cache des ressources externes pendant la navigation.
+        runtimeCaching: [
+          {
+            // Données Supabase (lectures) : réseau d'abord, puis cache si hors ligne.
+            urlPattern: /^https:\/\/[a-z0-9-]+\.supabase\.co\/rest\/v1\/.*/i,
+            handler: 'NetworkFirst',
+            method: 'GET',
+            options: {
+              cacheName: 'supabase-data',
+              networkTimeoutSeconds: 4,
+              expiration: {
+                maxEntries: 300,
+                maxAgeSeconds: 60 * 60 * 24 * 7, // 7 jours
+              },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            // Feuilles de style Google Fonts.
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+            handler: 'StaleWhileRevalidate',
+            options: { cacheName: 'google-fonts-css' },
+          },
+          {
+            // Fichiers de police Google Fonts.
+            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'google-fonts-files',
+              expiration: {
+                maxEntries: 30,
+                maxAgeSeconds: 60 * 60 * 24 * 365, // 1 an
+              },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
       },
-      // Permet de tester la PWA même en mode développement (npm run dev).
       devOptions: {
         enabled: true,
       },

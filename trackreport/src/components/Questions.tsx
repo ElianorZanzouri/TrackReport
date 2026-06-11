@@ -1,28 +1,21 @@
 import { useEffect, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
-import { supabase } from '../supabaseClient'
+import { db, type Interview } from '../db'
+import { localInsert, localUpdate, localDelete } from '../sync'
 
 type Props = { user: User }
 
-type Question = {
-  id: string
-  question: string
-  answer: string | null
-  category: string | null
-  tags: string[] | null
-}
-
 const CATEGORY_SUGGESTIONS = [
-  'Technical',
-  'Behavioral',
-  'HR',
-  'Company culture',
-  'Logic',
-  'Case study',
+  'Technique',
+  'Comportemental',
+  'RH',
+  'Culture d’entreprise',
+  'Logique',
+  'Mise en situation',
 ]
 
 export default function Questions({ user }: Props) {
-  const [list, setList] = useState<Question[]>([])
+  const [list, setList] = useState<Interview[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
@@ -38,14 +31,15 @@ export default function Questions({ user }: Props) {
   const [tagInput, setTagInput] = useState('')
   const [saving, setSaving] = useState(false)
 
+  // Lecture depuis la base LOCALE (Dexie) : instantané et disponible hors ligne.
   async function load() {
-    const { data, error } = await supabase
-      .from('interview')
-      .select('id, question, answer, category, tags')
-      .order('created_at', { ascending: false })
-
-    if (error) setError(error.message)
-    else setList((data as Question[]) ?? [])
+    try {
+      const rows = await db.interview.toArray()
+      rows.sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))
+      setList(rows)
+    } catch (e: any) {
+      setError(e.message ?? String(e))
+    }
     setLoading(false)
   }
 
@@ -72,13 +66,11 @@ export default function Questions({ user }: Props) {
     setTags([])
     setTagInput('')
   }
-
   function openAdd() {
     resetForm()
     setOpen(true)
   }
-
-  function openEdit(q: Question) {
+  function openEdit(q: Interview) {
     setEditingId(q.id)
     setQuestion(q.question)
     setAnswer(q.answer ?? '')
@@ -87,12 +79,10 @@ export default function Questions({ user }: Props) {
     setTagInput('')
     setOpen(true)
   }
-
   function closeModal() {
     setOpen(false)
   }
 
-  // --- Gestion des tags ---
   function addTag(value: string) {
     const t = value.trim()
     if (t && !tags.includes(t)) setTags((prev) => [...prev, t])
@@ -116,45 +106,47 @@ export default function Questions({ user }: Props) {
     setSaving(true)
     setError(null)
 
-    // Include any tag currently being typed but not yet confirmed
     const finalTags = tagInput.trim()
       ? Array.from(new Set([...tags, tagInput.trim()]))
       : tags
 
-    const payload = {
+    const fields = {
       question: question.trim(),
       answer: answer.trim() || null,
       category: category.trim() || null,
       tags: finalTags.length ? finalTags : null,
     }
 
-    let saveError = null
-    if (editingId) {
-      const { error } = await supabase
-        .from('interview')
-        .update(payload)
-        .eq('id', editingId)
-      saveError = error
-    } else {
-      const { error } = await supabase
-        .from('interview')
-        .insert({ user_id: user.id, ...payload })
-      saveError = error
-    }
-
-    if (saveError) setError(saveError.message)
-    else {
+    try {
+      if (editingId) {
+        // Modification : en local + file d'attente
+        await localUpdate('interview', editingId, fields)
+      } else {
+        // Ajout : on génère un identifiant côté client (stable, hors ligne)
+        const row: Interview = {
+          id: crypto.randomUUID(),
+          user_id: user.id,
+          created_at: new Date().toISOString(),
+          ...fields,
+        }
+        await localInsert('interview', row)
+      }
       closeModal()
       await load()
+    } catch (e: any) {
+      setError(e.message ?? String(e))
     }
     setSaving(false)
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Delete this question?')) return
-    const { error } = await supabase.from('interview').delete().eq('id', id)
-    if (error) setError(error.message)
-    else setList((prev) => prev.filter((q) => q.id !== id))
+    if (!confirm('Supprimer cette question ?')) return
+    try {
+      await localDelete('interview', id)
+      setList((prev) => prev.filter((q) => q.id !== id))
+    } catch (e: any) {
+      setError(e.message ?? String(e))
+    }
   }
 
   const categories = Array.from(
@@ -182,11 +174,11 @@ export default function Questions({ user }: Props) {
 
       <div className="qst-head">
         <div>
-          <p className="qst-eyebrow">Preparation</p>
-          <h1 className="qst-title">Interview questions</h1>
+          <p className="qst-eyebrow">Préparation</p>
+          <h1 className="qst-title">Questions d’entretien</h1>
         </div>
         <button className="qst-new" onClick={openAdd}>
-          + New question
+          + Nouvelle question
         </button>
       </div>
 
@@ -196,7 +188,7 @@ export default function Questions({ user }: Props) {
             className="qst-search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search (question, answer, topic, tag)…"
+            placeholder="Rechercher (question, réponse, thème, tag)…"
           />
           {categories.length > 0 && (
             <select
@@ -204,7 +196,7 @@ export default function Questions({ user }: Props) {
               value={catFilter}
               onChange={(e) => setCatFilter(e.target.value)}
             >
-              <option value="all">All topics</option>
+              <option value="all">Tous les thèmes</option>
               {categories.map((c) => (
                 <option key={c} value={c}>
                   {c}
@@ -218,13 +210,14 @@ export default function Questions({ user }: Props) {
       {error && <p className="qst-error">{error}</p>}
 
       {loading ? (
-        <p className="qst-muted">Loading…</p>
+        <p className="qst-muted">Chargement…</p>
       ) : list.length === 0 ? (
         <p className="qst-muted">
-          Your question bank is empty. Add interview questions and your answers to prepare.
+          Votre banque est vide. Ajoutez les questions rencontrées en entretien
+          et vos réponses pour vous y préparer.
         </p>
       ) : filtered.length === 0 ? (
-        <p className="qst-muted">No questions match those filters.</p>
+        <p className="qst-muted">Aucune question ne correspond à ces filtres.</p>
       ) : (
         <ul className="qst-list">
           {filtered.map((q) => (
@@ -246,8 +239,8 @@ export default function Questions({ user }: Props) {
               <button
                 className="qst-del"
                 onClick={() => handleDelete(q.id)}
-                aria-label="Delete"
-                title="Delete"
+                aria-label="Supprimer"
+                title="Supprimer"
               >
                 ✕
               </button>
@@ -266,9 +259,9 @@ export default function Questions({ user }: Props) {
           <div className="qst-modal" role="dialog" aria-modal="true">
             <div className="qst-modal-head">
               <h2 className="qst-modal-title">
-                {editingId ? 'Edit question' : 'New question'}
+                {editingId ? 'Modifier la question' : 'Nouvelle question'}
               </h2>
-              <button className="qst-close" onClick={closeModal} aria-label="Close">
+              <button className="qst-close" onClick={closeModal} aria-label="Fermer">
                 ✕
               </button>
             </div>
@@ -280,18 +273,18 @@ export default function Questions({ user }: Props) {
                 className="qst-field qst-textarea"
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
-                placeholder="Tell me about a project you're proud of."
+                placeholder="Parlez-moi d’un projet dont vous êtes fier."
                 rows={2}
                 autoFocus
               />
 
-              <label className="qst-label">Topic</label>
+              <label className="qst-label">Thème</label>
               <input
                 className="qst-field"
                 list="qst-categories"
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                placeholder="Technical, HR, behavioral…"
+                placeholder="Technique, RH, comportemental…"
               />
               <datalist id="qst-categories">
                 {CATEGORY_SUGGESTIONS.map((s) => (
@@ -304,11 +297,11 @@ export default function Questions({ user }: Props) {
                 {tags.map((t) => (
                   <span key={t} className="qst-chip">
                     {t}
-                      <button
+                    <button
                       type="button"
                       className="qst-chip-x"
                       onClick={() => removeTag(t)}
-                      aria-label={`Remove ${t}`}
+                      aria-label={`Retirer ${t}`}
                     >
                       ✕
                     </button>
@@ -319,29 +312,29 @@ export default function Questions({ user }: Props) {
                   value={tagInput}
                   onChange={(e) => setTagInput(e.target.value)}
                   onKeyDown={handleTagKey}
-                  placeholder={tags.length ? '' : 'Add a tag, Enter to confirm'}
+                  placeholder={tags.length ? '' : 'Ajouter un tag, Entrée pour valider'}
                 />
               </div>
 
-              <label className="qst-label">Your answer</label>
+              <label className="qst-label">Votre réponse</label>
               <textarea
                 className="qst-field qst-textarea"
                 value={answer}
                 onChange={(e) => setAnswer(e.target.value)}
-                placeholder="Write your prepared answer and key points to remember…"
+                placeholder="Notez votre réponse préparée, les points à ne pas oublier…"
                 rows={5}
               />
 
               <div className="qst-actions">
                 <button type="button" className="qst-cancel" onClick={closeModal}>
-                  Cancel
+                  Annuler
                 </button>
                 <button
                   type="submit"
                   className="qst-submit"
                   disabled={saving || !question.trim()}
                 >
-                  {saving ? 'Saving…' : editingId ? 'Save' : 'Add'}
+                  {saving ? 'Enregistrement…' : editingId ? 'Enregistrer' : 'Ajouter'}
                 </button>
               </div>
             </form>
