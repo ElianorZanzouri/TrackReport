@@ -35,14 +35,14 @@ export default function Profile({ user }: ProfileProps) {
     setSaving(true)
     setMessage(null)
     try {
-      // Écriture locale + file d'attente (upsert côté serveur).
+      // Local write + outbox (upsert on server).
       await localInsert('profils', {
         id: user.id,
         mail: user.email,
         full_name: fullName,
         about: about,
       })
-      setMessage({ type: 'success', text: 'Profil enregistré.' })
+      setMessage({ type: 'success', text: 'Profile saved.' })
     } catch (e: any) {
       setMessage({ type: 'error', text: e.message ?? String(e) })
     }
@@ -53,18 +53,18 @@ export default function Profile({ user }: ProfileProps) {
     <div className="trp-page">
       <style>{CSS}</style>
 
-      <p className="trp-eyebrow">Profil</p>
-      <h1 className="trp-title">Votre profil</h1>
+      <p className="trp-eyebrow">Profile</p>
+      <h1 className="trp-title">Your profile</h1>
 
       {loading ? (
-        <p className="trp-loading">Chargement…</p>
+        <p className="trp-loading">Loading…</p>
       ) : (
         <form className="trp-card" onSubmit={handleSave}>
           <label className="trp-label">Email</label>
           <input className="trp-input trp-readonly" value={user.email ?? ''} readOnly />
-          <p className="trp-hint">Lié à votre compte, non modifiable ici.</p>
+          <p className="trp-hint">Linked to your account, not editable here.</p>
 
-          <label className="trp-label">Nom complet</label>
+          <label className="trp-label">Full name</label>
           <input
             className="trp-input"
             type="text"
@@ -73,12 +73,12 @@ export default function Profile({ user }: ProfileProps) {
             placeholder="Camille Dupont"
           />
 
-          <label className="trp-label">À propos</label>
+          <label className="trp-label">About</label>
           <textarea
             className="trp-input trp-textarea"
             value={about}
             onChange={(e) => setAbout(e.target.value)}
-            placeholder="Quelques mots sur votre parcours, ce que vous recherchez…"
+            placeholder="A few words about your background and what you are looking for…"
             rows={4}
           />
 
@@ -89,7 +89,7 @@ export default function Profile({ user }: ProfileProps) {
           )}
 
           <button className="trp-save" type="submit" disabled={saving}>
-            {saving ? 'Enregistrement…' : 'Enregistrer'}
+            {saving ? 'Saving…' : 'Save'}
           </button>
         </form>
       )}

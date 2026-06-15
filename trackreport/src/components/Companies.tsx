@@ -96,15 +96,15 @@ export default function Companies({ user }: Props) {
   async function handleDelete(id: string) {
     if (
       !confirm(
-        'Supprimer cette entreprise ? Ses contacts seront supprimés, et les candidatures liées seront déliées (mais conservées).'
+        'Delete this company? Its contacts will be removed, and linked applications will be unlinked (but kept).'
       )
     )
       return
     try {
-      // Suppression synchronisée de l'entreprise (le serveur cascade les contacts
-      // et délie les candidatures).
+      // Synchronized deletion of the company (server cascades contacts
+      // and unlinks applications).
       await localDelete('companies', id)
-      // Cohérence locale immédiate (le serveur fera la même chose de son côté).
+      // Local consistency immediately (server will do the same on its side).
       await db.contacts.where('company_id').equals(id).delete()
       await db.applications.where('company_id').equals(id).modify({ company_id: null })
       setList((prev) => prev.filter((c) => c.id !== id))
@@ -119,32 +119,32 @@ export default function Companies({ user }: Props) {
 
       <div className="cmp-head">
         <div>
-          <p className="cmp-eyebrow">Réseau</p>
-          <h1 className="cmp-title">Entreprises &amp; contacts</h1>
+          <p className="cmp-eyebrow">Network</p>
+          <h1 className="cmp-title">Companies &amp; contacts</h1>
         </div>
         <button className="cmp-new" onClick={() => setOpen(true)}>
-          + Nouvelle entreprise
+          + New company
         </button>
       </div>
 
       {error && <p className="cmp-error">{error}</p>}
 
       {loading ? (
-        <p className="cmp-muted">Chargement…</p>
+        <p className="cmp-muted">Loading…</p>
       ) : list.length === 0 ? (
         <p className="cmp-muted">
-          Aucune entreprise pour l’instant. Elles apparaîtront ici dès votre
-          première candidature, ou ajoutez-en une manuellement.
+          No companies yet. They will appear here after your first application,
+          or add one manually.
         </p>
       ) : (
         <ul className="cmp-list">
           {list.map((c) => (
             <li key={c.id} className="cmp-card">
-              <Link to={`/entreprises/${c.id}`} className="cmp-card-link">
+              <Link to={`/companies/${c.id}`} className="cmp-card-link">
                 <div className="cmp-card-main">
                   <h3 className="cmp-card-title">{c.company_name}</h3>
                   <p className="cmp-card-meta">
-                    {c.domain ? c.domain : 'Domaine non précisé'}
+                    {c.domain ? c.domain : 'Domain not specified'}
                     <span className="cmp-count">
                       {' · '}
                       {c.contactCount} contact{c.contactCount > 1 ? 's' : ''}
@@ -156,8 +156,8 @@ export default function Companies({ user }: Props) {
               <button
                 className="cmp-del"
                 onClick={() => handleDelete(c.id)}
-                aria-label="Supprimer"
-                title="Supprimer"
+                aria-label="Delete"
+                title="Delete"
               >
                 ✕
               </button>
@@ -175,14 +175,14 @@ export default function Companies({ user }: Props) {
         >
           <div className="cmp-modal" role="dialog" aria-modal="true">
             <div className="cmp-modal-head">
-              <h2 className="cmp-modal-title">Nouvelle entreprise</h2>
-              <button className="cmp-close" onClick={closeModal} aria-label="Fermer">
+              <h2 className="cmp-modal-title">New company</h2>
+              <button className="cmp-close" onClick={closeModal} aria-label="Close">
                 ✕
               </button>
             </div>
             <form onSubmit={handleCreate}>
               <label className="cmp-label">
-                Nom <span className="cmp-req">*</span>
+                Name <span className="cmp-req">*</span>
               </label>
               <input
                 className="cmp-field"
@@ -191,31 +191,31 @@ export default function Companies({ user }: Props) {
                 placeholder="Acme Studio"
                 autoFocus
               />
-              <label className="cmp-label">Domaine d’activité</label>
+              <label className="cmp-label">Industry</label>
               <input
                 className="cmp-field"
                 value={domain}
                 onChange={(e) => setDomain(e.target.value)}
-                placeholder="Logiciel, finance, design…"
+                placeholder="Software, finance, design…"
               />
               <label className="cmp-label">Notes</label>
               <textarea
                 className="cmp-field cmp-textarea"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Ce que vous savez sur l’entreprise…"
+                placeholder="What you know about the company…"
                 rows={3}
               />
               <div className="cmp-actions">
                 <button type="button" className="cmp-cancel" onClick={closeModal}>
-                  Annuler
+                  Cancel
                 </button>
                 <button
                   type="submit"
                   className="cmp-submit"
                   disabled={creating || !name.trim()}
                 >
-                  {creating ? 'Création…' : 'Créer'}
+                  {creating ? 'Creating…' : 'Create'}
                 </button>
               </div>
             </form>

@@ -1,15 +1,15 @@
-// Synchronisation entre la base locale (Dexie) et Supabase.
+// Synchronization between the local DB (Dexie) and Supabase.
 import { supabase } from './supabaseClient'
 import { db } from './db'
 
-// Prévient l'interface qu'il faut rafraîchir le compteur de la file d'attente.
+// Let the UI know the queue count should refresh.
 function emitChange() {
   try {
     window.dispatchEvent(new Event('tr-sync'))
   } catch {}
 }
 
-// ---------- Descendre (serveur -> local) ----------
+// ---------- Pull (server -> local) ----------
 export async function pullAll() {
   if (!navigator.onLine) return
   try {
@@ -36,11 +36,11 @@ export async function pullAll() {
       }
     )
   } catch (e) {
-    console.warn('pullAll : synchronisation impossible', e)
+    console.warn('pullAll: synchronization failed', e)
   }
 }
 
-// ---------- Remonter (local -> serveur) ----------
+// ---------- Push (local -> server) ----------
 export async function pushOutbox() {
   if (!navigator.onLine) return
   const ops = await db.outbox.orderBy('id').toArray()
@@ -59,13 +59,13 @@ export async function pushOutbox() {
       await db.outbox.delete(op.id!)
       emitChange()
     } catch (e) {
-      console.warn('pushOutbox : envoi interrompu, on réessaiera', e)
+      console.warn('pushOutbox: send interrupted, will retry', e)
       break
     }
   }
 }
 
-// ---------- Synchronisation complète ----------
+// ---------- Full synchronization ----------
 export async function syncAll() {
   await pushOutbox()
   await pullAll()
@@ -85,12 +85,12 @@ export async function syncSoon() {
   }
 }
 
-// Nombre d'opérations en attente d'envoi.
+// Number of pending operations waiting to be sent.
 export async function pendingCount(): Promise<number> {
   return db.outbox.count()
 }
 
-// ---------- Écritures locales (avec mise en file d'attente) ----------
+// ---------- Local writes (queued) ----------
 export async function localInsert(table: string, row: any) {
   await (db as any)[table].put(row)
   await db.outbox.add({ table, op: 'insert', rowId: row.id, payload: row, created_at: Date.now() })

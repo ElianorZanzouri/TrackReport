@@ -148,7 +148,7 @@ export default function CompanyDetail({ user }: Props) {
   }
 
   async function handleDeleteContact(contactId: string) {
-    if (!confirm('Supprimer ce contact ?')) return
+    if (!confirm('Delete this contact?')) return
     try {
       await localDelete('contacts', contactId)
       setContacts((prev) => prev.filter((c) => c.id !== contactId))
@@ -161,7 +161,7 @@ export default function CompanyDetail({ user }: Props) {
     return (
       <div className="cpd-page">
         <style>{CSS}</style>
-        <p className="cpd-muted">Chargement…</p>
+        <p className="cpd-muted">Loading…</p>
       </div>
     )
   }
@@ -170,8 +170,8 @@ export default function CompanyDetail({ user }: Props) {
     return (
       <div className="cpd-page">
         <style>{CSS}</style>
-        <Link to="/entreprises" className="cpd-back">← Toutes les entreprises</Link>
-        <p className="cpd-muted">Entreprise introuvable.</p>
+        <Link to="/companies" className="cpd-back">← All companies</Link>
+        <p className="cpd-muted">Company not found.</p>
       </div>
     )
   }
@@ -180,14 +180,14 @@ export default function CompanyDetail({ user }: Props) {
     <div className="cpd-page">
       <style>{CSS}</style>
 
-      <Link to="/entreprises" className="cpd-back">← Toutes les entreprises</Link>
+      <Link to="/companies" className="cpd-back">← All companies</Link>
       <h1 className="cpd-title">{company.company_name}</h1>
 
       {error && <p className="cpd-error">{error}</p>}
 
       <form className="cpd-card" onSubmit={handleSaveCompany}>
-        <h2 className="cpd-card-title">Informations</h2>
-        <label className="cpd-label">Nom</label>
+        <h2 className="cpd-card-title">Information</h2>
+        <label className="cpd-label">Name</label>
         <input
           className="cpd-field"
           value={name}
@@ -196,7 +196,7 @@ export default function CompanyDetail({ user }: Props) {
             setSavedMsg(false)
           }}
         />
-        <label className="cpd-label">Domaine d’activité</label>
+        <label className="cpd-label">Industry</label>
         <input
           className="cpd-field"
           value={domain}
@@ -204,7 +204,7 @@ export default function CompanyDetail({ user }: Props) {
             setDomain(e.target.value)
             setSavedMsg(false)
           }}
-          placeholder="Logiciel, finance, design…"
+          placeholder="Software, finance, design…"
         />
         <label className="cpd-label">Notes</label>
         <textarea
@@ -217,9 +217,9 @@ export default function CompanyDetail({ user }: Props) {
           rows={3}
         />
         <div className="cpd-saverow">
-          {savedMsg && <span className="cpd-saved">Enregistré.</span>}
+          {savedMsg && <span className="cpd-saved">Saved.</span>}
           <button className="cpd-save" type="submit" disabled={savingCompany}>
-            {savingCompany ? 'Enregistrement…' : 'Enregistrer'}
+            {savingCompany ? 'Saving…' : 'Save'}
           </button>
         </div>
       </form>
@@ -228,12 +228,12 @@ export default function CompanyDetail({ user }: Props) {
         <div className="cpd-card-head">
           <h2 className="cpd-card-title cpd-nomargin">Contacts</h2>
           <button className="cpd-addbtn" onClick={openAddContact}>
-            + Ajouter un contact
+            + Add contact
           </button>
         </div>
 
         {contacts.length === 0 ? (
-          <p className="cpd-muted">Aucun contact pour cette entreprise.</p>
+          <p className="cpd-muted">No contacts for this company.</p>
         ) : (
           <ul className="cpd-contacts">
             {contacts.map((c) => (
@@ -251,8 +251,8 @@ export default function CompanyDetail({ user }: Props) {
                 <button
                   className="cpd-contact-del"
                   onClick={() => handleDeleteContact(c.id)}
-                  aria-label="Supprimer"
-                  title="Supprimer"
+                  aria-label="Delete"
+                  title="Delete"
                 >
                   ✕
                 </button>
@@ -263,16 +263,16 @@ export default function CompanyDetail({ user }: Props) {
       </div>
 
       <div className="cpd-card">
-        <h2 className="cpd-card-title">Candidatures dans cette entreprise</h2>
+        <h2 className="cpd-card-title">Applications at this company</h2>
         {apps.length === 0 ? (
-          <p className="cpd-muted">Aucune candidature liée.</p>
+          <p className="cpd-muted">No linked applications.</p>
         ) : (
           <ul className="cpd-apps">
             {apps.map((a) => {
               const st = statusInfo(a.status_actuel)
               return (
                 <li key={a.id}>
-                  <Link to={`/candidatures/${a.id}`} className="cpd-app">
+                  <Link to={`/applications/${a.id}`} className="cpd-app">
                     <span>{a.position}</span>
                     <span className="cpd-app-badge">
                       <span className="cpd-app-dot" style={{ background: st.color }} />
@@ -296,15 +296,15 @@ export default function CompanyDetail({ user }: Props) {
           <div className="cpd-modal" role="dialog" aria-modal="true">
             <div className="cpd-modal-head">
               <h2 className="cpd-modal-title">
-                {editingId ? 'Modifier le contact' : 'Nouveau contact'}
+                {editingId ? 'Edit contact' : 'New contact'}
               </h2>
-              <button className="cpd-close" onClick={closeContact} aria-label="Fermer">
+              <button className="cpd-close" onClick={closeContact} aria-label="Close">
                 ✕
               </button>
             </div>
             <form onSubmit={handleSaveContact}>
               <label className="cpd-label">
-                Nom <span className="cpd-req">*</span>
+                Name <span className="cpd-req">*</span>
               </label>
               <input
                 className="cpd-field"
@@ -313,12 +313,12 @@ export default function CompanyDetail({ user }: Props) {
                 placeholder="Camille Dupont"
                 autoFocus
               />
-              <label className="cpd-label">Rôle</label>
+              <label className="cpd-label">Role</label>
               <input
                 className="cpd-field"
                 value={cPosition}
                 onChange={(e) => setCPosition(e.target.value)}
-                placeholder="Recruteur, manager, RH…"
+                placeholder="Recruiter, manager, HR…"
               />
               <div className="cpd-row2">
                 <div>
@@ -331,7 +331,7 @@ export default function CompanyDetail({ user }: Props) {
                   />
                 </div>
                 <div>
-                  <label className="cpd-label">Téléphone</label>
+                  <label className="cpd-label">Phone</label>
                   <input
                     className="cpd-field"
                     value={cPhone}
@@ -345,12 +345,12 @@ export default function CompanyDetail({ user }: Props) {
                 className="cpd-field cpd-textarea"
                 value={cNotes}
                 onChange={(e) => setCNotes(e.target.value)}
-                placeholder="Rencontré au forum, très réactif par mail…"
+                placeholder="Met at an event, very responsive by email…"
                 rows={3}
               />
               <div className="cpd-actions">
                 <button type="button" className="cpd-cancel" onClick={closeContact}>
-                  Annuler
+                  Cancel
                 </button>
                 <button
                   type="submit"
@@ -358,10 +358,10 @@ export default function CompanyDetail({ user }: Props) {
                   disabled={savingContact || !cName.trim()}
                 >
                   {savingContact
-                    ? 'Enregistrement…'
+                    ? 'Saving…'
                     : editingId
-                    ? 'Enregistrer'
-                    : 'Ajouter'}
+                    ? 'Save'
+                    : 'Add'}
                 </button>
               </div>
             </form>

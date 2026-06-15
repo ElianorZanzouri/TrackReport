@@ -29,7 +29,7 @@ export default function Applications({ user }: ApplicationsProps) {
   const [description, setDescription] = useState('')
   const [creating, setCreating] = useState(false)
 
-  // Lecture depuis la base locale, avec jointure manuelle pour le nom d'entreprise.
+  // Read from the local database, with a manual join for company name.
   async function load() {
     try {
       const [apps, companies] = await Promise.all([
@@ -75,7 +75,7 @@ export default function Applications({ user }: ApplicationsProps) {
     setDescription('')
   }
 
-  // Trouver l'entreprise (par nom, insensible à la casse) ou la créer en local.
+  // Find the company by name (case-insensitive) or create it locally.
   async function getOrCreateCompany(name: string): Promise<string> {
     const trimmed = name.trim()
     const companies = await db.companies.toArray()
@@ -119,7 +119,7 @@ export default function Applications({ user }: ApplicationsProps) {
         created_at: nowISO,
       })
 
-      // Première entrée d'historique
+      // First history entry
       await localInsert('histories_status', {
         id: crypto.randomUUID(),
         user_id: user.id,
@@ -138,7 +138,7 @@ export default function Applications({ user }: ApplicationsProps) {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Supprimer cette candidature ?')) return
+    if (!confirm('Delete this application?')) return
     try {
       await localDelete('applications', id)
       setList((prev) => prev.filter((a) => a.id !== id))
@@ -163,11 +163,11 @@ export default function Applications({ user }: ApplicationsProps) {
 
       <div className="apc-head">
         <div>
-          <p className="apc-eyebrow">Suivi</p>
-          <h1 className="apc-title">Vos candidatures</h1>
+          <p className="apc-eyebrow">Tracking</p>
+          <h1 className="apc-title">Your applications</h1>
         </div>
         <button className="apc-new" onClick={() => setOpen(true)}>
-          + Nouvelle candidature
+          + New application
         </button>
       </div>
 
@@ -178,14 +178,14 @@ export default function Applications({ user }: ApplicationsProps) {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Rechercher un poste ou une société…"
+            placeholder="Search role or company…"
           />
           <select
             className="apc-statusfilter"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
           >
-            <option value="all">Tous les statuts</option>
+            <option value="all">All statuses</option>
             {Object.entries(STATUS).map(([value, s]) => (
               <option key={value} value={value}>
                 {s.label}
@@ -198,28 +198,28 @@ export default function Applications({ user }: ApplicationsProps) {
       {error && <p className="apc-error">{error}</p>}
 
       {loading ? (
-        <p className="apc-muted">Chargement…</p>
+        <p className="apc-muted">Loading…</p>
       ) : list.length === 0 ? (
         <p className="apc-muted">
-          Aucune candidature pour l’instant. Cliquez sur « Nouvelle candidature ».
+          No applications yet. Click "New application".
         </p>
       ) : filtered.length === 0 ? (
-        <p className="apc-muted">Aucune candidature ne correspond à ces filtres.</p>
+        <p className="apc-muted">No applications match these filters.</p>
       ) : (
         <ul className="apc-list">
           {filtered.map((a) => {
             const st = statusInfo(a.status_actuel)
             return (
               <li key={a.id} className="apc-card">
-                <Link to={`/candidatures/${a.id}`} className="apc-card-link">
+                <Link to={`/applications/${a.id}`} className="apc-card-link">
                   <div className="apc-card-main">
                     <h3 className="apc-card-title">{a.position}</h3>
                     <p className="apc-card-meta">
-                      {a.company_name ?? 'Entreprise non précisée'}
+                      {a.company_name ?? 'Company not specified'}
                       {a.date_update && (
                         <span className="apc-date">
                           {' · '}
-                          {new Date(a.date_update).toLocaleDateString('fr-FR')}
+                          {new Date(a.date_update).toLocaleDateString('en-US')}
                         </span>
                       )}
                     </p>
@@ -232,8 +232,8 @@ export default function Applications({ user }: ApplicationsProps) {
                 <button
                   className="apc-del"
                   onClick={() => handleDelete(a.id)}
-                  aria-label="Supprimer"
-                  title="Supprimer"
+                  aria-label="Delete"
+                  title="Delete"
                 >
                   ✕
                 </button>
@@ -252,28 +252,23 @@ export default function Applications({ user }: ApplicationsProps) {
         >
           <div className="apc-modal" role="dialog" aria-modal="true">
             <div className="apc-modal-head">
-              <h2 className="apc-modal-title">Nouvelle candidature</h2>
-              <button className="apc-close" onClick={closeModal} aria-label="Fermer">
+              <h2 className="apc-modal-title">New application</h2>
+              <button className="apc-close" onClick={closeModal} aria-label="Close">
                 ✕
               </button>
             </div>
 
             <form onSubmit={handleCreate}>
               <label className="apc-label">
-                Nom du poste <span className="apc-req">*</span>
+                Position <span className="apc-req">*</span>
               </label>
               <input
                 className="apc-field"
                 type="text"
                 value={position}
                 onChange={(e) => setPosition(e.target.value)}
-                placeholder="Développeur Front-End"
-                autoFocus
+                  placeholder="Front-End Developer"
               />
-
-              <label className="apc-label">
-                Société <span className="apc-req">*</span>
-              </label>
               <input
                 className="apc-field"
                 type="text"
@@ -282,25 +277,25 @@ export default function Applications({ user }: ApplicationsProps) {
                 placeholder="Acme Studio"
               />
 
-              <label className="apc-label">Description du poste</label>
+              <label className="apc-label">Job description</label>
               <textarea
                 className="apc-field apc-textarea"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Missions, stack technique, ce que vous avez retenu de l’offre…"
+                placeholder="Tasks, tech stack, what you gathered from the listing…"
                 rows={4}
               />
 
               <div className="apc-actions">
                 <button type="button" className="apc-cancel" onClick={closeModal}>
-                  Annuler
+                  Cancel
                 </button>
                 <button
                   type="submit"
                   className="apc-submit"
                   disabled={creating || !position.trim() || !company.trim()}
                 >
-                  {creating ? 'Création…' : 'Créer'}
+                  {creating ? 'Creating…' : 'Create'}
                 </button>
               </div>
             </form>

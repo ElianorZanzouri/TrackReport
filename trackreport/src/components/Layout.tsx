@@ -11,7 +11,7 @@ export default function Layout() {
   useEffect(() => {
     const refresh = async () => setPending(await pendingCount())
     refresh()
-    syncSoon() // au démarrage : on remonte la file et on rafraîchit le local
+    syncSoon() // at startup: flush the queue and refresh local data
 
     const goOnline = () => {
       setOnline(true)
@@ -48,8 +48,7 @@ export default function Layout() {
 
       {!online && (
         <div className="trl-offline">
-          Hors ligne — vos modifications sont enregistrées et seront envoyées au
-          retour de la connexion.
+          Offline — your changes are saved and will sync when you reconnect.
         </div>
       )}
 
@@ -65,34 +64,34 @@ export default function Layout() {
         </Link>
 
         <nav className="trl-links">
-          <NavLink to="/" end className={linkClass}>Candidatures</NavLink>
-          <NavLink to="/entreprises" className={linkClass}>Entreprises</NavLink>
+          <NavLink to="/" end className={linkClass}>Applications</NavLink>
+          <NavLink to="/companies" className={linkClass}>Companies</NavLink>
           <NavLink to="/questions" className={linkClass}>Questions</NavLink>
-          <NavLink to="/profil" className={linkClass}>Profil</NavLink>
+          <NavLink to="/profile" className={linkClass}>Profile</NavLink>
         </nav>
 
         {(syncing || pending > 0) && (
           <button
             className="trl-sync"
             onClick={() => syncSoon()}
-            title="Cliquer pour synchroniser maintenant"
+            title="Click to sync now"
           >
             {syncing ? (
               <>
                 <span className="trl-spin" />
-                Synchronisation…
+                Syncing…
               </>
             ) : (
               <>
                 <span className="trl-pendingdot" />
-                {pending} en attente
+                {pending} pending
               </>
             )}
           </button>
         )}
 
         <button className="trl-signout" onClick={() => supabase.auth.signOut()}>
-          Se déconnecter
+          Sign out
         </button>
       </header>
 

@@ -16,8 +16,8 @@ export default defineConfig({
       manifest: {
         name: 'TrackReport',
         short_name: 'TrackReport',
-        description: 'Suivez toutes vos candidatures en un seul endroit.',
-        lang: 'fr',
+        description: 'Track all your applications in one place.',
+        lang: 'en',
         theme_color: '#4F46E5',
         background_color: '#FBFBF8',
         display: 'standalone',
@@ -34,14 +34,14 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // Mise en cache de l'app elle-même (interface).
+        // Cache the app shell itself.
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         navigateFallback: '/index.html',
 
-        // Mise en cache des ressources externes pendant la navigation.
+        // Cache external resources used during navigation.
         runtimeCaching: [
           {
-            // Données Supabase (lectures) : réseau d'abord, puis cache si hors ligne.
+            // Supabase reads: network first, then cache when offline.
             urlPattern: /^https:\/\/[a-z0-9-]+\.supabase\.co\/rest\/v1\/.*/i,
             handler: 'NetworkFirst',
             method: 'GET',

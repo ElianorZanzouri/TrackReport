@@ -1,5 +1,5 @@
-// Base de données locale (IndexedDB via Dexie). Reflète les tables Supabase
-// + une file d'attente "outbox" pour les écritures faites hors ligne.
+// Local database (IndexedDB via Dexie). Mirrors Supabase tables
+// + an outbox queue for writes done offline.
 import Dexie, { type Table } from 'dexie'
 
 export type Profil = {
@@ -55,7 +55,7 @@ export type Interview = {
   created_at?: string
 }
 
-// Une opération en attente d'envoi vers Supabase.
+// An operation waiting to be sent to Supabase.
 export type OutboxOp = {
   id?: number // auto-incrément
   table: string
