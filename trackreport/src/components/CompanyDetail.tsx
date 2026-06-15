@@ -1,25 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import type { User } from '@supabase/supabase-js'
-import { supabase } from '../supabaseClient'
+import { db, type Contact, type Company } from '../db'
+import { localInsert, localUpdate, localDelete } from '../sync'
 import { statusInfo } from '../Status'
 
 type Props = { user: User }
 
-type Company = {
-  id: string
-  company_name: string
-  domain: string | null
-  notes: string | null
-}
-type Contact = {
-  id: string
-  name: string
-  position: string | null
-  mail: string | null
-  phone: string | null
-  notes: string | null
-}
 type AppRow = { id: string; position: string; status_actuel: string }
 
 export default function CompanyDetail({ user }: Props) {
@@ -30,14 +17,12 @@ export default function CompanyDetail({ user }: Props) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Company editing
   const [name, setName] = useState('')
   const [domain, setDomain] = useState('')
   const [notes, setNotes] = useState('')
   const [savingCompany, setSavingCompany] = useState(false)
   const [savedMsg, setSavedMsg] = useState(false)
 
-  // Modale contact (ajout OU modification)
   const [contactOpen, setContactOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [cName, setCName] = useState('')
@@ -49,40 +34,25 @@ export default function CompanyDetail({ user }: Props) {
 
   async function load() {
     if (!id) return
+    try {
+      const c = (await db.companies.get(id)) ?? null
+      setCompany(c)
+      if (c) {
+        setName(c.company_name)
+        setDomain(c.domain ?? '')
+        setNotes(c.notes ?? '')
+      }
 
-    const { data: comp, error: compErr } = await supabase
-      .from('companies')
-      .select('id, company_name, domain, notes')
-      .eq('id', id)
-      .maybeSingle()
+      const cts = await db.contacts.where('company_id').equals(id).toArray()
+      cts.sort((a, b) => (a.created_at ?? '').localeCompare(b.created_at ?? ''))
+      setContacts(cts)
 
-    if (compErr) {
-      setError(compErr.message)
-      setLoading(false)
-      return
+      const ap = await db.applications.where('company_id').equals(id).toArray()
+      ap.sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))
+      setApps(ap.map((a) => ({ id: a.id, position: a.position, status_actuel: a.status_actuel })))
+    } catch (e: any) {
+      setError(e.message ?? String(e))
     }
-    const c = comp as Company | null
-    setCompany(c)
-    if (c) {
-      setName(c.company_name)
-      setDomain(c.domain ?? '')
-      setNotes(c.notes ?? '')
-    }
-
-    const { data: cts } = await supabase
-      .from('contacts')
-      .select('id, name, position, mail, phone, notes')
-      .eq('company_id', id)
-      .order('created_at', { ascending: true })
-    setContacts((cts as Contact[]) ?? [])
-
-    const { data: ap } = await supabase
-      .from('applications')
-      .select('id, position, status_actuel')
-      .eq('company_id', id)
-      .order('created_at', { ascending: false })
-    setApps((ap as AppRow[]) ?? [])
-
     setLoading(false)
   }
 
@@ -90,7 +60,6 @@ export default function CompanyDetail({ user }: Props) {
     load()
   }, [id])
 
-  // Escape to close the modal + block scrolling
   useEffect(() => {
     if (!contactOpen) return
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && closeContact()
@@ -108,25 +77,20 @@ export default function CompanyDetail({ user }: Props) {
     setSavingCompany(true)
     setError(null)
     setSavedMsg(false)
-
-    const { error } = await supabase
-      .from('companies')
-      .update({
+    try {
+      await localUpdate('companies', id, {
         company_name: name.trim(),
         domain: domain.trim() || null,
         notes: notes.trim() || null,
       })
-      .eq('id', id)
-
-    if (error) setError(error.message)
-    else {
       setSavedMsg(true)
       setCompany((prev) => (prev ? { ...prev, company_name: name.trim() } : prev))
+    } catch (e: any) {
+      setError(e.message ?? String(e))
     }
     setSavingCompany(false)
   }
 
-  // --- Modale contact ---
   function openAddContact() {
     setEditingId(null)
     setCName('')
@@ -136,7 +100,6 @@ export default function CompanyDetail({ user }: Props) {
     setCNotes('')
     setContactOpen(true)
   }
-
   function openEditContact(c: Contact) {
     setEditingId(c.id)
     setCName(c.name)
@@ -146,7 +109,6 @@ export default function CompanyDetail({ user }: Props) {
     setCNotes(c.notes ?? '')
     setContactOpen(true)
   }
-
   function closeContact() {
     setContactOpen(false)
   }
@@ -157,7 +119,7 @@ export default function CompanyDetail({ user }: Props) {
     setSavingContact(true)
     setError(null)
 
-    const payload = {
+    const fields = {
       name: cName.trim(),
       position: cPosition.trim() || null,
       mail: cMail.trim() || null,
@@ -165,42 +127,41 @@ export default function CompanyDetail({ user }: Props) {
       notes: cNotes.trim() || null,
     }
 
-    let saveError = null
-    if (editingId) {
-      // Modification
-      const { error } = await supabase
-        .from('contacts')
-        .update(payload)
-        .eq('id', editingId)
-      saveError = error
-    } else {
-      // Ajout
-      const { error } = await supabase
-        .from('contacts')
-        .insert({ user_id: user.id, company_id: id, ...payload })
-      saveError = error
-    }
-
-    if (saveError) setError(saveError.message)
-    else {
+    try {
+      if (editingId) {
+        await localUpdate('contacts', editingId, fields)
+      } else {
+        await localInsert('contacts', {
+          id: crypto.randomUUID(),
+          user_id: user.id,
+          company_id: id,
+          created_at: new Date().toISOString(),
+          ...fields,
+        })
+      }
       closeContact()
       await load()
+    } catch (e: any) {
+      setError(e.message ?? String(e))
     }
     setSavingContact(false)
   }
 
   async function handleDeleteContact(contactId: string) {
-    if (!confirm('Delete this contact?')) return
-    const { error } = await supabase.from('contacts').delete().eq('id', contactId)
-    if (error) setError(error.message)
-    else setContacts((prev) => prev.filter((c) => c.id !== contactId))
+    if (!confirm('Supprimer ce contact ?')) return
+    try {
+      await localDelete('contacts', contactId)
+      setContacts((prev) => prev.filter((c) => c.id !== contactId))
+    } catch (e: any) {
+      setError(e.message ?? String(e))
+    }
   }
 
   if (loading) {
     return (
       <div className="cpd-page">
         <style>{CSS}</style>
-        <p className="cpd-muted">Loading…</p>
+        <p className="cpd-muted">Chargement…</p>
       </div>
     )
   }
@@ -209,8 +170,8 @@ export default function CompanyDetail({ user }: Props) {
     return (
       <div className="cpd-page">
         <style>{CSS}</style>
-        <Link to="/companies" className="cpd-back">← All companies</Link>
-        <p className="cpd-muted">Company not found.</p>
+        <Link to="/entreprises" className="cpd-back">← Toutes les entreprises</Link>
+        <p className="cpd-muted">Entreprise introuvable.</p>
       </div>
     )
   }
@@ -219,15 +180,14 @@ export default function CompanyDetail({ user }: Props) {
     <div className="cpd-page">
       <style>{CSS}</style>
 
-      <Link to="/companies" className="cpd-back">← All companies</Link>
+      <Link to="/entreprises" className="cpd-back">← Toutes les entreprises</Link>
       <h1 className="cpd-title">{company.company_name}</h1>
 
       {error && <p className="cpd-error">{error}</p>}
 
-      {/* Company info */}
       <form className="cpd-card" onSubmit={handleSaveCompany}>
-        <h2 className="cpd-card-title">Information</h2>
-        <label className="cpd-label">Name</label>
+        <h2 className="cpd-card-title">Informations</h2>
+        <label className="cpd-label">Nom</label>
         <input
           className="cpd-field"
           value={name}
@@ -236,7 +196,7 @@ export default function CompanyDetail({ user }: Props) {
             setSavedMsg(false)
           }}
         />
-        <label className="cpd-label">Domain</label>
+        <label className="cpd-label">Domaine d’activité</label>
         <input
           className="cpd-field"
           value={domain}
@@ -244,7 +204,7 @@ export default function CompanyDetail({ user }: Props) {
             setDomain(e.target.value)
             setSavedMsg(false)
           }}
-          placeholder="Software, finance, design…"
+          placeholder="Logiciel, finance, design…"
         />
         <label className="cpd-label">Notes</label>
         <textarea
@@ -257,24 +217,23 @@ export default function CompanyDetail({ user }: Props) {
           rows={3}
         />
         <div className="cpd-saverow">
-          {savedMsg && <span className="cpd-saved">Saved.</span>}
+          {savedMsg && <span className="cpd-saved">Enregistré.</span>}
           <button className="cpd-save" type="submit" disabled={savingCompany}>
-            {savingCompany ? 'Saving…' : 'Save'}
+            {savingCompany ? 'Enregistrement…' : 'Enregistrer'}
           </button>
         </div>
       </form>
 
-      {/* Contacts */}
       <div className="cpd-card">
         <div className="cpd-card-head">
           <h2 className="cpd-card-title cpd-nomargin">Contacts</h2>
           <button className="cpd-addbtn" onClick={openAddContact}>
-            + Add contact
+            + Ajouter un contact
           </button>
         </div>
 
         {contacts.length === 0 ? (
-          <p className="cpd-muted">No contacts for this company.</p>
+          <p className="cpd-muted">Aucun contact pour cette entreprise.</p>
         ) : (
           <ul className="cpd-contacts">
             {contacts.map((c) => (
@@ -292,8 +251,8 @@ export default function CompanyDetail({ user }: Props) {
                 <button
                   className="cpd-contact-del"
                   onClick={() => handleDeleteContact(c.id)}
-                  aria-label="Delete"
-                  title="Delete"
+                  aria-label="Supprimer"
+                  title="Supprimer"
                 >
                   ✕
                 </button>
@@ -303,18 +262,17 @@ export default function CompanyDetail({ user }: Props) {
         )}
       </div>
 
-      {/* Related applications */}
       <div className="cpd-card">
-        <h2 className="cpd-card-title">Applications at this company</h2>
+        <h2 className="cpd-card-title">Candidatures dans cette entreprise</h2>
         {apps.length === 0 ? (
-          <p className="cpd-muted">No related applications.</p>
+          <p className="cpd-muted">Aucune candidature liée.</p>
         ) : (
           <ul className="cpd-apps">
             {apps.map((a) => {
               const st = statusInfo(a.status_actuel)
               return (
                 <li key={a.id}>
-                  <Link to={`/applications/${a.id}`} className="cpd-app">
+                  <Link to={`/candidatures/${a.id}`} className="cpd-app">
                     <span>{a.position}</span>
                     <span className="cpd-app-badge">
                       <span className="cpd-app-dot" style={{ background: st.color }} />
@@ -328,7 +286,6 @@ export default function CompanyDetail({ user }: Props) {
         )}
       </div>
 
-      {/* Modale contact */}
       {contactOpen && (
         <div
           className="cpd-overlay"
@@ -339,29 +296,29 @@ export default function CompanyDetail({ user }: Props) {
           <div className="cpd-modal" role="dialog" aria-modal="true">
             <div className="cpd-modal-head">
               <h2 className="cpd-modal-title">
-                {editingId ? 'Edit contact' : 'New contact'}
+                {editingId ? 'Modifier le contact' : 'Nouveau contact'}
               </h2>
-              <button className="cpd-close" onClick={closeContact} aria-label="Close">
+              <button className="cpd-close" onClick={closeContact} aria-label="Fermer">
                 ✕
               </button>
             </div>
             <form onSubmit={handleSaveContact}>
               <label className="cpd-label">
-                Name <span className="cpd-req">*</span>
+                Nom <span className="cpd-req">*</span>
               </label>
               <input
                 className="cpd-field"
                 value={cName}
                 onChange={(e) => setCName(e.target.value)}
-                placeholder="Jane Doe"
+                placeholder="Camille Dupont"
                 autoFocus
               />
-              <label className="cpd-label">Role</label>
+              <label className="cpd-label">Rôle</label>
               <input
                 className="cpd-field"
                 value={cPosition}
                 onChange={(e) => setCPosition(e.target.value)}
-                placeholder="Recruiter, manager, HR…"
+                placeholder="Recruteur, manager, RH…"
               />
               <div className="cpd-row2">
                 <div>
@@ -370,11 +327,11 @@ export default function CompanyDetail({ user }: Props) {
                     className="cpd-field"
                     value={cMail}
                     onChange={(e) => setCMail(e.target.value)}
-                    placeholder="jane@acme.com"
+                    placeholder="camille@acme.com"
                   />
                 </div>
                 <div>
-                  <label className="cpd-label">Phone</label>
+                  <label className="cpd-label">Téléphone</label>
                   <input
                     className="cpd-field"
                     value={cPhone}
@@ -388,12 +345,12 @@ export default function CompanyDetail({ user }: Props) {
                 className="cpd-field cpd-textarea"
                 value={cNotes}
                 onChange={(e) => setCNotes(e.target.value)}
-                placeholder="Met at the fair, very responsive by email…"
+                placeholder="Rencontré au forum, très réactif par mail…"
                 rows={3}
               />
               <div className="cpd-actions">
                 <button type="button" className="cpd-cancel" onClick={closeContact}>
-                  Cancel
+                  Annuler
                 </button>
                 <button
                   type="submit"
@@ -401,10 +358,10 @@ export default function CompanyDetail({ user }: Props) {
                   disabled={savingContact || !cName.trim()}
                 >
                   {savingContact
-                    ? 'Saving…'
+                    ? 'Enregistrement…'
                     : editingId
-                    ? 'Save'
-                    : 'Add'}
+                    ? 'Enregistrer'
+                    : 'Ajouter'}
                 </button>
               </div>
             </form>
@@ -460,7 +417,6 @@ const CSS = `
 .cpd-app-badge{display:inline-flex;align-items:center;gap:6px;font-size:.8rem;color:var(--muted);white-space:nowrap;}
 .cpd-app-dot{width:8px;height:8px;border-radius:50%;}
 
-/* Modale */
 .cpd-overlay{position:fixed;inset:0;z-index:50;background:rgba(22,24,29,.45);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;padding:20px;animation:cpdFade .15s ease;}
 .cpd-modal{width:100%;max-width:480px;background:var(--panel);border:1px solid var(--rail);border-radius:20px;padding:26px;box-shadow:0 40px 80px -24px rgba(22,24,29,.4);animation:cpdPop .18s ease;max-height:90vh;overflow-y:auto;}
 .cpd-modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}

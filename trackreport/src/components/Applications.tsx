@@ -1,45 +1,55 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { User } from '@supabase/supabase-js'
-import { supabase } from '../supabaseClient'
+import { db } from '../db'
+import { localInsert, localDelete } from '../sync'
 import { STATUS, statusInfo } from '../Status'
 
-type ApplicationsProps = {
-  user: User
-}
+type ApplicationsProps = { user: User }
 
-type Application = {
+type AppView = {
   id: string
   position: string
   status_actuel: string
   date_update: string | null
-  companies: { company_name: string } | null
+  company_name: string | null
 }
 
 export default function Applications({ user }: ApplicationsProps) {
-  const [list, setList] = useState<Application[]>([])
+  const [list, setList] = useState<AppView[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Filters
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
 
-  // Add modal
   const [open, setOpen] = useState(false)
   const [position, setPosition] = useState('')
   const [company, setCompany] = useState('')
   const [description, setDescription] = useState('')
   const [creating, setCreating] = useState(false)
 
+  // Lecture depuis la base locale, avec jointure manuelle pour le nom d'entreprise.
   async function load() {
-    const { data, error } = await supabase
-      .from('applications')
-      .select('id, position, status_actuel, date_update, companies(company_name)')
-      .order('created_at', { ascending: false })
-
-    if (error) setError(error.message)
-    else setList((data as unknown as Application[]) ?? [])
+    try {
+      const [apps, companies] = await Promise.all([
+        db.applications.toArray(),
+        db.companies.toArray(),
+      ])
+      const nameById = new Map(companies.map((c) => [c.id, c.company_name]))
+      apps.sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))
+      setList(
+        apps.map((a) => ({
+          id: a.id,
+          position: a.position,
+          status_actuel: a.status_actuel,
+          date_update: a.date_update,
+          company_name: a.company_id ? nameById.get(a.company_id) ?? null : null,
+        }))
+      )
+    } catch (e: any) {
+      setError(e.message ?? String(e))
+    }
     setLoading(false)
   }
 
@@ -65,32 +75,25 @@ export default function Applications({ user }: ApplicationsProps) {
     setDescription('')
   }
 
-  async function getOrCreateCompany(name: string): Promise<string | null> {
+  // Trouver l'entreprise (par nom, insensible à la casse) ou la créer en local.
+  async function getOrCreateCompany(name: string): Promise<string> {
     const trimmed = name.trim()
-    const { data: matches, error: findErr } = await supabase
-      .from('companies')
-      .select('id')
-      .eq('user_id', user.id)
-      .ilike('company_name', trimmed)
-      .limit(1)
+    const companies = await db.companies.toArray()
+    const existing = companies.find(
+      (c) => c.company_name.toLowerCase() === trimmed.toLowerCase()
+    )
+    if (existing) return existing.id
 
-    if (findErr) {
-      setError(findErr.message)
-      return null
-    }
-    if (matches && matches.length > 0) return matches[0].id
-
-    const { data: created, error: createErr } = await supabase
-      .from('companies')
-      .insert({ user_id: user.id, company_name: trimmed })
-      .select('id')
-      .single()
-
-    if (createErr) {
-      setError(createErr.message)
-      return null
-    }
-    return created.id
+    const id = crypto.randomUUID()
+    await localInsert('companies', {
+      id,
+      user_id: user.id,
+      company_name: trimmed,
+      domain: null,
+      notes: null,
+      created_at: new Date().toISOString(),
+    })
+    return id
   }
 
   async function handleCreate(e: React.FormEvent) {
@@ -99,58 +102,57 @@ export default function Applications({ user }: ApplicationsProps) {
     setCreating(true)
     setError(null)
 
-    const companyId = await getOrCreateCompany(company)
-    if (!companyId) {
-      setCreating(false)
-      return
-    }
+    try {
+      const companyId = await getOrCreateCompany(company)
+      const nowISO = new Date().toISOString()
+      const today = nowISO.slice(0, 10)
+      const appId = crypto.randomUUID()
 
-    const today = new Date().toISOString().slice(0, 10)
-    const { data: created, error } = await supabase
-      .from('applications')
-      .insert({
+      await localInsert('applications', {
+        id: appId,
         user_id: user.id,
-        position: position.trim(),
         company_id: companyId,
+        position: position.trim(),
         description: description.trim() || null,
         status_actuel: 'applied',
         date_update: today,
+        created_at: nowISO,
       })
-      .select('id')
-      .single()
 
-    if (error) {
-      setError(error.message)
-      setCreating(false)
-      return
+      // Première entrée d'historique
+      await localInsert('histories_status', {
+        id: crypto.randomUUID(),
+        user_id: user.id,
+        application_id: appId,
+        status: 'applied',
+        date_updated: nowISO,
+        reason: null,
+      })
+
+      closeModal()
+      await load()
+    } catch (e: any) {
+      setError(e.message ?? String(e))
     }
-
-    // First history entry: the application starts at "Applied".
-    await supabase.from('histories_status').insert({
-      user_id: user.id,
-      application_id: created.id,
-      status: 'applied',
-    })
-
-    closeModal()
-    await load()
     setCreating(false)
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Delete this application?')) return
-    const { error } = await supabase.from('applications').delete().eq('id', id)
-    if (error) setError(error.message)
-    else setList((prev) => prev.filter((a) => a.id !== id))
+    if (!confirm('Supprimer cette candidature ?')) return
+    try {
+      await localDelete('applications', id)
+      setList((prev) => prev.filter((a) => a.id !== id))
+    } catch (e: any) {
+      setError(e.message ?? String(e))
+    }
   }
 
-  // Client-side filtering (the list is already loaded)
   const filtered = list.filter((a) => {
     const q = search.trim().toLowerCase()
     const matchText =
       !q ||
       a.position.toLowerCase().includes(q) ||
-      (a.companies?.company_name ?? '').toLowerCase().includes(q)
+      (a.company_name ?? '').toLowerCase().includes(q)
     const matchStatus = statusFilter === 'all' || a.status_actuel === statusFilter
     return matchText && matchStatus
   })
@@ -161,15 +163,14 @@ export default function Applications({ user }: ApplicationsProps) {
 
       <div className="apc-head">
         <div>
-          <p className="apc-eyebrow">Tracking</p>
-          <h1 className="apc-title">Your applications</h1>
+          <p className="apc-eyebrow">Suivi</p>
+          <h1 className="apc-title">Vos candidatures</h1>
         </div>
         <button className="apc-new" onClick={() => setOpen(true)}>
-          + New application
+          + Nouvelle candidature
         </button>
       </div>
 
-      {/* Barre de filtres */}
       {list.length > 0 && (
         <div className="apc-filters">
           <input
@@ -177,14 +178,14 @@ export default function Applications({ user }: ApplicationsProps) {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search for a role or company…"
+            placeholder="Rechercher un poste ou une société…"
           />
           <select
             className="apc-statusfilter"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
           >
-            <option value="all">All statuses</option>
+            <option value="all">Tous les statuts</option>
             {Object.entries(STATUS).map(([value, s]) => (
               <option key={value} value={value}>
                 {s.label}
@@ -197,28 +198,28 @@ export default function Applications({ user }: ApplicationsProps) {
       {error && <p className="apc-error">{error}</p>}
 
       {loading ? (
-        <p className="apc-muted">Loading…</p>
+        <p className="apc-muted">Chargement…</p>
       ) : list.length === 0 ? (
         <p className="apc-muted">
-          No applications yet. Click on “New application”.
+          Aucune candidature pour l’instant. Cliquez sur « Nouvelle candidature ».
         </p>
       ) : filtered.length === 0 ? (
-        <p className="apc-muted">No applications match these filters.</p>
+        <p className="apc-muted">Aucune candidature ne correspond à ces filtres.</p>
       ) : (
         <ul className="apc-list">
           {filtered.map((a) => {
             const st = statusInfo(a.status_actuel)
             return (
               <li key={a.id} className="apc-card">
-                <Link to={`/applications/${a.id}`} className="apc-card-link">
+                <Link to={`/candidatures/${a.id}`} className="apc-card-link">
                   <div className="apc-card-main">
                     <h3 className="apc-card-title">{a.position}</h3>
                     <p className="apc-card-meta">
-                      {a.companies?.company_name ?? 'Company not specified'}
+                      {a.company_name ?? 'Entreprise non précisée'}
                       {a.date_update && (
                         <span className="apc-date">
                           {' · '}
-                          {new Date(a.date_update).toLocaleDateString('en-US')}
+                          {new Date(a.date_update).toLocaleDateString('fr-FR')}
                         </span>
                       )}
                     </p>
@@ -231,8 +232,8 @@ export default function Applications({ user }: ApplicationsProps) {
                 <button
                   className="apc-del"
                   onClick={() => handleDelete(a.id)}
-                  aria-label="Delete"
-                  title="Delete"
+                  aria-label="Supprimer"
+                  title="Supprimer"
                 >
                   ✕
                 </button>
@@ -242,7 +243,6 @@ export default function Applications({ user }: ApplicationsProps) {
         </ul>
       )}
 
-      {/* Modale */}
       {open && (
         <div
           className="apc-overlay"
@@ -252,27 +252,27 @@ export default function Applications({ user }: ApplicationsProps) {
         >
           <div className="apc-modal" role="dialog" aria-modal="true">
             <div className="apc-modal-head">
-              <h2 className="apc-modal-title">New application</h2>
-              <button className="apc-close" onClick={closeModal} aria-label="Close">
+              <h2 className="apc-modal-title">Nouvelle candidature</h2>
+              <button className="apc-close" onClick={closeModal} aria-label="Fermer">
                 ✕
               </button>
             </div>
 
             <form onSubmit={handleCreate}>
               <label className="apc-label">
-                Role <span className="apc-req">*</span>
+                Nom du poste <span className="apc-req">*</span>
               </label>
               <input
                 className="apc-field"
                 type="text"
                 value={position}
                 onChange={(e) => setPosition(e.target.value)}
-                placeholder="Front-End Developer"
+                placeholder="Développeur Front-End"
                 autoFocus
               />
 
               <label className="apc-label">
-                Company <span className="apc-req">*</span>
+                Société <span className="apc-req">*</span>
               </label>
               <input
                 className="apc-field"
@@ -282,25 +282,25 @@ export default function Applications({ user }: ApplicationsProps) {
                 placeholder="Acme Studio"
               />
 
-              <label className="apc-label">Role description</label>
+              <label className="apc-label">Description du poste</label>
               <textarea
                 className="apc-field apc-textarea"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Tasks, tech stack, what stood out in the job posting…"
+                placeholder="Missions, stack technique, ce que vous avez retenu de l’offre…"
                 rows={4}
               />
 
               <div className="apc-actions">
                 <button type="button" className="apc-cancel" onClick={closeModal}>
-                  Cancel
+                  Annuler
                 </button>
                 <button
                   type="submit"
                   className="apc-submit"
                   disabled={creating || !position.trim() || !company.trim()}
                 >
-                  {creating ? 'Creating…' : 'Create'}
+                  {creating ? 'Création…' : 'Créer'}
                 </button>
               </div>
             </form>

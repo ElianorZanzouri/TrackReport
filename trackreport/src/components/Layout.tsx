@@ -1,26 +1,41 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
-import { syncAll } from '../sync'
+import { syncSoon, pendingCount } from '../sync'
 
-// Mise en page commune : barre de navigation, bandeau hors ligne, puis le contenu.
 export default function Layout() {
   const [online, setOnline] = useState(navigator.onLine)
+  const [pending, setPending] = useState(0)
+  const [syncing, setSyncing] = useState(false)
 
   useEffect(() => {
-    // Au démarrage : on remonte les écritures en attente, puis on rafraîchit le local.
-    syncAll()
+    const refresh = async () => setPending(await pendingCount())
+    refresh()
+    syncSoon() // au démarrage : on remonte la file et on rafraîchit le local
 
     const goOnline = () => {
       setOnline(true)
-      syncAll() // au retour du réseau : on synchronise dans les deux sens
+      syncSoon()
     }
     const goOffline = () => setOnline(false)
+    const onChange = () => refresh()
+    const onStart = () => setSyncing(true)
+    const onEnd = () => {
+      setSyncing(false)
+      refresh()
+    }
+
     window.addEventListener('online', goOnline)
     window.addEventListener('offline', goOffline)
+    window.addEventListener('tr-sync', onChange)
+    window.addEventListener('tr-sync-start', onStart)
+    window.addEventListener('tr-sync-end', onEnd)
     return () => {
       window.removeEventListener('online', goOnline)
       window.removeEventListener('offline', goOffline)
+      window.removeEventListener('tr-sync', onChange)
+      window.removeEventListener('tr-sync-start', onStart)
+      window.removeEventListener('tr-sync-end', onEnd)
     }
   }, [])
 
@@ -33,8 +48,8 @@ export default function Layout() {
 
       {!online && (
         <div className="trl-offline">
-          Hors ligne — vous consultez des données enregistrées. Les
-          modifications nécessitent une connexion.
+          Hors ligne — vos modifications sont enregistrées et seront envoyées au
+          retour de la connexion.
         </div>
       )}
 
@@ -50,19 +65,31 @@ export default function Layout() {
         </Link>
 
         <nav className="trl-links">
-          <NavLink to="/" end className={linkClass}>
-            Candidatures
-          </NavLink>
-          <NavLink to="/entreprises" className={linkClass}>
-            Entreprises
-          </NavLink>
-          <NavLink to="/questions" className={linkClass}>
-            Questions
-          </NavLink>
-          <NavLink to="/profil" className={linkClass}>
-            Profil
-          </NavLink>
+          <NavLink to="/" end className={linkClass}>Candidatures</NavLink>
+          <NavLink to="/entreprises" className={linkClass}>Entreprises</NavLink>
+          <NavLink to="/questions" className={linkClass}>Questions</NavLink>
+          <NavLink to="/profil" className={linkClass}>Profil</NavLink>
         </nav>
+
+        {(syncing || pending > 0) && (
+          <button
+            className="trl-sync"
+            onClick={() => syncSoon()}
+            title="Cliquer pour synchroniser maintenant"
+          >
+            {syncing ? (
+              <>
+                <span className="trl-spin" />
+                Synchronisation…
+              </>
+            ) : (
+              <>
+                <span className="trl-pendingdot" />
+                {pending} en attente
+              </>
+            )}
+          </button>
+        )}
 
         <button className="trl-signout" onClick={() => supabase.auth.signOut()}>
           Se déconnecter
@@ -109,7 +136,7 @@ const CSS = `
 
 .trl-nav{
   max-width:880px;margin:0 auto;padding:20px 24px;
-  display:flex;align-items:center;gap:24px;
+  display:flex;align-items:center;gap:16px;
 }
 .trl-brand{
   display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink);
@@ -122,6 +149,21 @@ const CSS = `
 }
 .trl-link:hover{color:var(--ink);background:rgba(22,24,29,.04);}
 .trl-link-on{color:var(--ink);background:var(--brand-soft);}
+
+.trl-sync{
+  display:inline-flex;align-items:center;gap:7px;cursor:pointer;
+  font-family:var(--body);font-size:.8rem;font-weight:500;color:var(--brand);
+  background:var(--brand-soft);border:none;border-radius:999px;padding:6px 12px;
+  transition:filter .2s;white-space:nowrap;
+}
+.trl-sync:hover{filter:brightness(.96);}
+.trl-pendingdot{width:7px;height:7px;border-radius:50%;background:var(--brand);display:inline-block;}
+.trl-spin{
+  width:11px;height:11px;border-radius:50%;
+  border:2px solid var(--brand-soft);border-top-color:var(--brand);
+  display:inline-block;animation:trlspin .7s linear infinite;
+}
+
 .trl-signout{
   background:none;border:none;cursor:pointer;font-family:var(--body);
   font-size:.9rem;color:var(--muted);padding:6px 2px;transition:color .2s;
@@ -130,8 +172,10 @@ const CSS = `
 
 .trl-main{max-width:880px;margin:0 auto;padding:16px 24px 64px;}
 
-@media (max-width:560px){
-  .trl-nav{flex-wrap:wrap;gap:14px;}
+@keyframes trlspin{to{transform:rotate(360deg);}}
+
+@media (max-width:620px){
+  .trl-nav{flex-wrap:wrap;gap:12px;}
   .trl-links{order:3;flex-basis:100%;margin-left:0;}
 }
 `

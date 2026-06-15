@@ -1,9 +1,13 @@
 // Synchronisation entre la base locale (Dexie) et Supabase.
-//  - pullAll  : descend les données du serveur vers le local
-//  - pushOutbox : remonte les écritures locales en attente vers le serveur
-//  - local*   : écrit en local + met l'opération en file d'attente
 import { supabase } from './supabaseClient'
 import { db } from './db'
+
+// Prévient l'interface qu'il faut rafraîchir le compteur de la file d'attente.
+function emitChange() {
+  try {
+    window.dispatchEvent(new Event('tr-sync'))
+  } catch {}
+}
 
 // ---------- Descendre (serveur -> local) ----------
 export async function pullAll() {
@@ -39,27 +43,22 @@ export async function pullAll() {
 // ---------- Remonter (local -> serveur) ----------
 export async function pushOutbox() {
   if (!navigator.onLine) return
-
   const ops = await db.outbox.orderBy('id').toArray()
   for (const op of ops) {
     try {
       if (op.op === 'insert') {
-        // upsert = idempotent (si l'opération est rejouée, pas de doublon)
         const { error } = await supabase.from(op.table).upsert(op.payload)
         if (error) throw error
       } else if (op.op === 'update') {
-        const { error } = await supabase
-          .from(op.table)
-          .update(op.payload)
-          .eq('id', op.rowId)
+        const { error } = await supabase.from(op.table).update(op.payload).eq('id', op.rowId)
         if (error) throw error
       } else if (op.op === 'delete') {
         const { error } = await supabase.from(op.table).delete().eq('id', op.rowId)
         if (error) throw error
       }
       await db.outbox.delete(op.id!)
+      emitChange()
     } catch (e) {
-      // Probablement hors ligne : on s'arrête, on réessaiera plus tard.
       console.warn('pushOutbox : envoi interrompu, on réessaiera', e)
       break
     }
@@ -67,7 +66,6 @@ export async function pushOutbox() {
 }
 
 // ---------- Synchronisation complète ----------
-// On remonte d'abord les écritures locales, PUIS on redescend le serveur.
 export async function syncAll() {
   await pushOutbox()
   await pullAll()
@@ -77,45 +75,39 @@ let syncing = false
 export async function syncSoon() {
   if (!navigator.onLine || syncing) return
   syncing = true
+  window.dispatchEvent(new Event('tr-sync-start'))
   try {
     await syncAll()
   } finally {
     syncing = false
+    window.dispatchEvent(new Event('tr-sync-end'))
+    emitChange()
   }
+}
+
+// Nombre d'opérations en attente d'envoi.
+export async function pendingCount(): Promise<number> {
+  return db.outbox.count()
 }
 
 // ---------- Écritures locales (avec mise en file d'attente) ----------
 export async function localInsert(table: string, row: any) {
   await (db as any)[table].put(row)
-  await db.outbox.add({
-    table,
-    op: 'insert',
-    rowId: row.id,
-    payload: row,
-    created_at: Date.now(),
-  })
+  await db.outbox.add({ table, op: 'insert', rowId: row.id, payload: row, created_at: Date.now() })
+  emitChange()
   void syncSoon()
 }
 
 export async function localUpdate(table: string, id: string, changes: any) {
   await (db as any)[table].update(id, changes)
-  await db.outbox.add({
-    table,
-    op: 'update',
-    rowId: id,
-    payload: changes,
-    created_at: Date.now(),
-  })
+  await db.outbox.add({ table, op: 'update', rowId: id, payload: changes, created_at: Date.now() })
+  emitChange()
   void syncSoon()
 }
 
 export async function localDelete(table: string, id: string) {
   await (db as any)[table].delete(id)
-  await db.outbox.add({
-    table,
-    op: 'delete',
-    rowId: id,
-    created_at: Date.now(),
-  })
+  await db.outbox.add({ table, op: 'delete', rowId: id, created_at: Date.now() })
+  emitChange()
   void syncSoon()
 }

@@ -1,67 +1,63 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import type { User } from '@supabase/supabase-js'
-import { supabase } from '../supabaseClient'
+import { db, type HistoryStatus } from '../db'
+import { localInsert, localUpdate } from '../sync'
 import { STATUS, statusInfo } from '../Status'
 
 type Props = { user: User }
 
-type Application = {
+type AppView = {
   id: string
   position: string
   description: string | null
   status_actuel: string
-  date_update: string | null
-  companies: { company_name: string } | null
-}
-
-type HistoryRow = {
-  id: string
-  status: string
-  date_updated: string
-  reason: string | null
+  company_name: string | null
 }
 
 export default function ApplicationDetail({ user }: Props) {
   const { id } = useParams()
-  const [app, setApp] = useState<Application | null>(null)
-  const [history, setHistory] = useState<HistoryRow[]>([])
+  const [app, setApp] = useState<AppView | null>(null)
+  const [history, setHistory] = useState<HistoryStatus[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Status change form
   const [newStatus, setNewStatus] = useState('applied')
   const [reason, setReason] = useState('')
   const [updating, setUpdating] = useState(false)
 
   async function load() {
     if (!id) return
+    try {
+      const a = await db.applications.get(id)
+      if (!a) {
+        setApp(null)
+        setLoading(false)
+        return
+      }
+      let companyName: string | null = null
+      if (a.company_id) {
+        const c = await db.companies.get(a.company_id)
+        companyName = c?.company_name ?? null
+      }
+      setApp({
+        id: a.id,
+        position: a.position,
+        description: a.description,
+        status_actuel: a.status_actuel,
+        company_name: companyName,
+      })
+      setNewStatus(a.status_actuel)
 
-    const { data: appData, error: appErr } = await supabase
-      .from('applications')
-      .select('id, position, description, status_actuel, date_update, companies(company_name)')
-      .eq('id', id)
-      .maybeSingle()
-
-    if (appErr) {
-      setError(appErr.message)
-      setLoading(false)
-      return
+      const hist = await db.histories_status
+        .where('application_id')
+        .equals(id)
+        .toArray()
+      hist.sort((x, y) => y.date_updated.localeCompare(x.date_updated))
+      setHistory(hist)
+    } catch (e: any) {
+      setError(e.message ?? String(e))
     }
-
-    const application = appData as unknown as Application | null
-    setApp(application)
-    if (application) setNewStatus(application.status_actuel)
-
-    const { data: hist, error: histErr } = await supabase
-      .from('histories_status')
-      .select('id, status, date_updated, reason')
-      .eq('application_id', id)
-      .order('date_updated', { ascending: false })
-
-    if (histErr) setError(histErr.message)
-    else setHistory((hist as HistoryRow[]) ?? [])
-
     setLoading(false)
   }
 
@@ -75,31 +71,28 @@ export default function ApplicationDetail({ user }: Props) {
     setUpdating(true)
     setError(null)
 
-    // 1. New history entry
-    const { error: histErr } = await supabase.from('histories_status').insert({
-      user_id: user.id,
-      application_id: id,
-      status: newStatus,
-      reason: reason.trim() || null,
-    })
+    try {
+      const nowISO = new Date().toISOString()
+      // 1. Nouvelle entrée d'historique (en local + file d'attente)
+      await localInsert('histories_status', {
+        id: crypto.randomUUID(),
+        user_id: user.id,
+        application_id: id,
+        status: newStatus,
+        date_updated: nowISO,
+        reason: reason.trim() || null,
+      })
+      // 2. Statut courant + date sur la candidature
+      await localUpdate('applications', id, {
+        status_actuel: newStatus,
+        date_update: nowISO.slice(0, 10),
+      })
 
-    if (histErr) {
-      setError(histErr.message)
-      setUpdating(false)
-      return
+      setReason('')
+      await load()
+    } catch (e: any) {
+      setError(e.message ?? String(e))
     }
-
-    // 2. Update current status + date on the application
-    const today = new Date().toISOString().slice(0, 10)
-    const { error: updErr } = await supabase
-      .from('applications')
-      .update({ status_actuel: newStatus, date_update: today })
-      .eq('id', id)
-
-    if (updErr) setError(updErr.message)
-
-    setReason('')
-    await load()
     setUpdating(false)
   }
 
@@ -107,7 +100,7 @@ export default function ApplicationDetail({ user }: Props) {
     return (
       <div className="apd-page">
         <style>{CSS}</style>
-        <p className="apd-muted">Loading…</p>
+        <p className="apd-muted">Chargement…</p>
       </div>
     )
   }
@@ -116,8 +109,8 @@ export default function ApplicationDetail({ user }: Props) {
     return (
       <div className="apd-page">
         <style>{CSS}</style>
-        <Link to="/" className="apd-back">← All applications</Link>
-        <p className="apd-muted">Application not found.</p>
+        <Link to="/" className="apd-back">← Toutes les candidatures</Link>
+        <p className="apd-muted">Candidature introuvable.</p>
       </div>
     )
   }
@@ -128,14 +121,12 @@ export default function ApplicationDetail({ user }: Props) {
     <div className="apd-page">
       <style>{CSS}</style>
 
-      <Link to="/" className="apd-back">← All applications</Link>
+      <Link to="/" className="apd-back">← Toutes les candidatures</Link>
 
       <div className="apd-header">
         <div>
           <h1 className="apd-title">{app.position}</h1>
-          <p className="apd-meta">
-            {app.companies?.company_name ?? 'Company not specified'}
-          </p>
+          <p className="apd-meta">{app.company_name ?? 'Entreprise non précisée'}</p>
         </div>
         <span className="apd-badge">
           <span className="apd-badge-dot" style={{ background: current.color }} />
@@ -145,16 +136,15 @@ export default function ApplicationDetail({ user }: Props) {
 
       {app.description && (
         <div className="apd-card">
-          <h2 className="apd-card-title">Job description</h2>
+          <h2 className="apd-card-title">Description du poste</h2>
           <p className="apd-desc">{app.description}</p>
         </div>
       )}
 
       {error && <p className="apd-error">{error}</p>}
 
-      {/* Change status */}
       <div className="apd-card">
-        <h2 className="apd-card-title">Change status</h2>
+        <h2 className="apd-card-title">Changer le statut</h2>
         <form className="apd-statusform" onSubmit={handleUpdateStatus}>
           <select
             className="apd-select"
@@ -172,19 +162,18 @@ export default function ApplicationDetail({ user }: Props) {
             type="text"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder="Reason / note (optional)"
+            placeholder="Raison / note (optionnel)"
           />
           <button className="apd-update" type="submit" disabled={updating}>
-            {updating ? '…' : 'Update'}
+            {updating ? '…' : 'Mettre à jour'}
           </button>
         </form>
       </div>
 
-      {/* Historique */}
       <div className="apd-card">
-        <h2 className="apd-card-title">History</h2>
+        <h2 className="apd-card-title">Historique</h2>
         {history.length === 0 ? (
-          <p className="apd-muted">No changes recorded yet.</p>
+          <p className="apd-muted">Aucun changement enregistré pour l’instant.</p>
         ) : (
           <ol className="apd-timeline">
             {history.map((h) => {
@@ -195,7 +184,7 @@ export default function ApplicationDetail({ user }: Props) {
                   <div className="apd-event-body">
                     <span className="apd-event-label">{st.label}</span>
                     <span className="apd-event-date">
-                      {new Date(h.date_updated).toLocaleString('en-US', {
+                      {new Date(h.date_updated).toLocaleString('fr-FR', {
                         dateStyle: 'medium',
                         timeStyle: 'short',
                       })}
