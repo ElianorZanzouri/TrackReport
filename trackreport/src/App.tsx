@@ -10,6 +10,7 @@ import ApplicationDetail from './components/ApplicationDetail'
 import Companies from './components/Companies'
 import CompanyDetail from './components/CompanyDetail'
 import Questions from './components/Questions'
+import Analysis from './components/Analysis'
 import Profile from './components/Profile'
 
 export default function App() {
@@ -23,11 +24,9 @@ export default function App() {
       setLoading(false)
     })
 
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setSession(session)
-      }
-    )
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session)
+    })
 
     return () => listener.subscription.unsubscribe()
   }, [])
@@ -58,16 +57,17 @@ export default function App() {
         <Route element={<Layout />}>
           <Route index element={<Applications user={session.user} />} />
           <Route
-            path="applications/:id"
+            path="candidatures/:id"
             element={<ApplicationDetail user={session.user} />}
           />
-          <Route path="companies" element={<Companies user={session.user} />} />
+          <Route path="entreprises" element={<Companies user={session.user} />} />
           <Route
-            path="companies/:id"
+            path="entreprises/:id"
             element={<CompanyDetail user={session.user} />}
           />
           <Route path="questions" element={<Questions user={session.user} />} />
-          <Route path="profile" element={<Profile user={session.user} />} />
+          <Route path="ia" element={<Analysis user={session.user} />} />
+          <Route path="profil" element={<Profile user={session.user} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

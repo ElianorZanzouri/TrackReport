@@ -11,7 +11,7 @@ export default function Layout() {
   useEffect(() => {
     const refresh = async () => setPending(await pendingCount())
     refresh()
-    syncSoon() // at startup: flush the queue and refresh local data
+    syncSoon() // on startup: flush the queue and refresh local data
 
     const goOnline = () => {
       setOnline(true)
@@ -48,7 +48,7 @@ export default function Layout() {
 
       {!online && (
         <div className="trl-offline">
-          Offline — your changes are saved and will sync when you reconnect.
+          Offline — your changes are saved and will be sent once connection returns.
         </div>
       )}
 
@@ -65,16 +65,17 @@ export default function Layout() {
 
         <nav className="trl-links">
           <NavLink to="/" end className={linkClass}>Applications</NavLink>
-          <NavLink to="/companies" className={linkClass}>Companies</NavLink>
+          <NavLink to="/entreprises" className={linkClass}>Companies</NavLink>
           <NavLink to="/questions" className={linkClass}>Questions</NavLink>
-          <NavLink to="/profile" className={linkClass}>Profile</NavLink>
+          <NavLink to="/ia" className={linkClass}>AI</NavLink>
+          <NavLink to="/profil" className={linkClass}>Profile</NavLink>
         </nav>
 
         {(syncing || pending > 0) && (
           <button
             className="trl-sync"
             onClick={() => syncSoon()}
-            title="Click to sync now"
+            title="Cliquer pour synchroniser maintenant"
           >
             {syncing ? (
               <>
