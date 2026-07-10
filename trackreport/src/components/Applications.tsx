@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import type { User } from '@supabase/supabase-js'
 import { db } from '../db'
 import { localInsert, localDelete } from '../sync'
 import { STATUS, statusInfo } from '../Status'
+import { uuid } from '../uuid'
 
+type User = { id: string; email: string }
 type ApplicationsProps = { user: User }
 
 type AppView = {
@@ -84,7 +85,7 @@ export default function Applications({ user }: ApplicationsProps) {
     )
     if (existing) return existing.id
 
-    const id = crypto.randomUUID()
+    const id = uuid()
     await localInsert('companies', {
       id,
       user_id: user.id,
@@ -106,7 +107,7 @@ export default function Applications({ user }: ApplicationsProps) {
       const companyId = await getOrCreateCompany(company)
       const nowISO = new Date().toISOString()
       const today = nowISO.slice(0, 10)
-      const appId = crypto.randomUUID()
+      const appId = uuid()
 
       await localInsert('applications', {
         id: appId,
@@ -121,7 +122,7 @@ export default function Applications({ user }: ApplicationsProps) {
 
       // First history entry
       await localInsert('histories_status', {
-        id: crypto.randomUUID(),
+        id: uuid(),
         user_id: user.id,
         application_id: appId,
         status: 'applied',

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import type { User } from '@supabase/supabase-js'
 import { db, type Interview } from '../db'
 import { localInsert, localUpdate, localDelete } from '../sync'
+import { uuid } from '../uuid'
 
+type User = { id: string; email: string }
 type Props = { user: User }
 
 const CATEGORY_SUGGESTIONS = [
@@ -124,7 +125,7 @@ export default function Questions({ user }: Props) {
       } else {
         // Add: generate a client-side ID (stable, offline)
         const row: Interview = {
-          id: crypto.randomUUID(),
+          id: uuid(),
           user_id: user.id,
           created_at: new Date().toISOString(),
           ...fields,

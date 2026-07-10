@@ -6,7 +6,7 @@ export const interviewsRouter = Router()
 
 interviewsRouter.use(requireAuth)
 
-// --- Lister mes questions ---
+// --- List my questions ---
 interviewsRouter.get('/', async (req: AuthRequest, res) => {
   try {
     const result = await pool.query(
@@ -16,16 +16,16 @@ interviewsRouter.get('/', async (req: AuthRequest, res) => {
     res.json(result.rows)
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: 'Erreur serveur.', detail: String(err) })
+    res.status(500).json({ error: 'Server error.', detail: String(err) })
   }
 })
 
-// --- Créer une question ---
+// --- Create a question ---
 interviewsRouter.post('/', async (req: AuthRequest, res) => {
   try {
     const { question, answer, category, tags } = req.body
     if (!question) {
-      return res.status(400).json({ error: 'La question est requise.' })
+      return res.status(400).json({ error: 'Question is required.' })
     }
     const result = await pool.query(
       `insert into interview (user_id, question, answer, category, tags)
@@ -36,11 +36,11 @@ interviewsRouter.post('/', async (req: AuthRequest, res) => {
     res.json(result.rows[0])
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: 'Erreur serveur.', detail: String(err) })
+    res.status(500).json({ error: 'Server error.', detail: String(err) })
   }
 })
 
-// --- Modifier une question ---
+// --- Update a question ---
 interviewsRouter.patch('/:id', async (req: AuthRequest, res) => {
   try {
     const { question, answer, category, tags } = req.body
@@ -56,16 +56,16 @@ interviewsRouter.patch('/:id', async (req: AuthRequest, res) => {
        req.params.id, req.userId]
     )
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Question introuvable.' })
+      return res.status(404).json({ error: 'Question not found.' })
     }
     res.json(result.rows[0])
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: 'Erreur serveur.', detail: String(err) })
+    res.status(500).json({ error: 'Server error.', detail: String(err) })
   }
 })
 
-// --- Supprimer une question ---
+// --- Delete a question ---
 interviewsRouter.delete('/:id', async (req: AuthRequest, res) => {
   try {
     const result = await pool.query(
@@ -73,11 +73,11 @@ interviewsRouter.delete('/:id', async (req: AuthRequest, res) => {
       [req.params.id, req.userId]
     )
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Question introuvable.' })
+      return res.status(404).json({ error: 'Question not found.' })
     }
     res.json({ ok: true, id: result.rows[0].id })
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: 'Erreur serveur.', detail: String(err) })
+    res.status(500).json({ error: 'Server error.', detail: String(err) })
   }
 })

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import type { User } from '@supabase/supabase-js'
 import { db } from '../db'
 import { localInsert, localDelete } from '../sync'
+import { uuid } from '../uuid'
 
+type User = { id: string; email: string }
 type Props = { user: User }
 
 type CompanyView = {
@@ -78,7 +79,7 @@ export default function Companies({ user }: Props) {
     setError(null)
     try {
       await localInsert('companies', {
-        id: crypto.randomUUID(),
+        id: uuid(),
         user_id: user.id,
         company_name: name.trim(),
         domain: domain.trim() || null,

@@ -6,7 +6,7 @@ export const contactsRouter = Router()
 
 contactsRouter.use(requireAuth)
 
-// --- Lister mes contacts (option : filtrer par entreprise) ---
+// --- List my contacts (option: filter by company) ---
 contactsRouter.get('/', async (req: AuthRequest, res) => {
   try {
     const { company_id } = req.query
@@ -22,16 +22,16 @@ contactsRouter.get('/', async (req: AuthRequest, res) => {
     res.json(result.rows)
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: 'Erreur serveur.', detail: String(err) })
+    res.status(500).json({ error: 'Server error.', detail: String(err) })
   }
 })
 
-// --- Créer un contact ---
+// --- Create a contact ---
 contactsRouter.post('/', async (req: AuthRequest, res) => {
   try {
     const { company_id, name, position, mail, phone, notes } = req.body
     if (!name) {
-      return res.status(400).json({ error: 'Le nom est requis.' })
+      return res.status(400).json({ error: 'Name is required.' })
     }
     const result = await pool.query(
       `insert into contacts (user_id, company_id, name, position, mail, phone, notes)
@@ -43,11 +43,11 @@ contactsRouter.post('/', async (req: AuthRequest, res) => {
     res.json(result.rows[0])
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: 'Erreur serveur.', detail: String(err) })
+    res.status(500).json({ error: 'Server error.', detail: String(err) })
   }
 })
 
-// --- Modifier un contact ---
+// --- Update a contact ---
 contactsRouter.patch('/:id', async (req: AuthRequest, res) => {
   try {
     const { name, position, mail, phone, notes } = req.body
@@ -64,16 +64,16 @@ contactsRouter.patch('/:id', async (req: AuthRequest, res) => {
        notes ?? null, req.params.id, req.userId]
     )
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Contact introuvable.' })
+      return res.status(404).json({ error: 'Contact not found.' })
     }
     res.json(result.rows[0])
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: 'Erreur serveur.', detail: String(err) })
+    res.status(500).json({ error: 'Server error.', detail: String(err) })
   }
 })
 
-// --- Supprimer un contact ---
+// --- Delete a contact ---
 contactsRouter.delete('/:id', async (req: AuthRequest, res) => {
   try {
     const result = await pool.query(
@@ -81,11 +81,11 @@ contactsRouter.delete('/:id', async (req: AuthRequest, res) => {
       [req.params.id, req.userId]
     )
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Contact introuvable.' })
+      return res.status(404).json({ error: 'Contact not found.' })
     }
     res.json({ ok: true, id: result.rows[0].id })
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: 'Erreur serveur.', detail: String(err) })
+    res.status(500).json({ error: 'Server error.', detail: String(err) })
   }
 })

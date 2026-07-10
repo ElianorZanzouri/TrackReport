@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
-import type { User } from '@supabase/supabase-js'
-import { supabase } from '../supabaseClient'
+import { apiPost } from '../api'
 import { localInsert } from '../sync'
+import { uuid } from '../uuid'
+
+type User = { id: string; email: string }
 
 type Analysis = {
   score: number
@@ -72,14 +74,12 @@ export default function Analyzer({
     setAdded(new Set())
     try {
       const cvBase64 = await fileToBase64(cvFile)
-      const { data, error } = await supabase.functions.invoke('analyze-cv', {
-        body: {
-          jobDescription: jobDesc.trim(),
-          cvBase64,
-          cvMimeType: cvFile.type || 'application/pdf',
-        },
+      // Call YOUR API (route /analyze), which talks to Gemini on the server.
+      const data = await apiPost('/analyze', {
+        jobDescription: jobDesc.trim(),
+        cvBase64,
+        cvMimeType: cvFile.type || 'application/pdf',
       })
-      if (error) throw error
       if (data?.error) throw new Error(data.detail || data.error)
       setResult(data as Analysis)
     } catch (e: any) {
@@ -91,7 +91,7 @@ export default function Analyzer({
   async function addQuestion(qText: string) {
     try {
       await localInsert('interview', {
-        id: crypto.randomUUID(),
+        id: uuid(),
         user_id: user.id,
         question: qText,
         answer: null,
@@ -110,21 +110,21 @@ export default function Analyzer({
       <style>{CSS}</style>
 
       <form className="cva-form" onSubmit={handleAnalyze}>
-<label className="cva-label">Your CV (PDF)</label>
-      <input
-        className="cva-file"
-        type="file"
-        accept="application/pdf"
-        onChange={(e) => setCvFile(e.target.files?.[0] ?? null)}
-      />
+        <label className="cva-label">Your CV (PDF)</label>
+        <input
+          className="cva-file"
+          type="file"
+          accept="application/pdf"
+          onChange={(e) => setCvFile(e.target.files?.[0] ?? null)}
+        />
 
-      <label className="cva-label">Job description</label>
-      <textarea
-        className="cva-textarea"
-        value={jobDesc}
-        onChange={(e) => setJobDesc(e.target.value)}
-        rows={6}
-        placeholder="Paste the full job description here…"
+        <label className="cva-label">Job description</label>
+        <textarea
+          className="cva-textarea"
+          value={jobDesc}
+          onChange={(e) => setJobDesc(e.target.value)}
+          rows={6}
+          placeholder="Paste the full job description here…"
         />
 
         {!online && (

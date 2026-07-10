@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import type { Session } from '@supabase/supabase-js'
-import { supabase } from './supabaseClient'
+import { getToken, setToken, apiGet } from './api'
 import Auth from './components/Auth'
 import Landing from './components/Landing'
 import Layout from './components/Layout'
@@ -13,23 +12,33 @@ import Questions from './components/Questions'
 import Analysis from './components/Analysis'
 import Profile from './components/Profile'
 
+type AppUser = { id: string; email: string; full_name?: string | null }
+
 export default function App() {
-  const [session, setSession] = useState<Session | null>(null)
+  const [user, setUser] = useState<AppUser | null>(null)
   const [loading, setLoading] = useState(true)
   const [authMode, setAuthMode] = useState<'signin' | 'signup' | null>(null)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session)
+    async function init() {
+      // If a token is present, we verify it's still valid by reading the profile.
+      if (getToken()) {
+        try {
+          const me = await apiGet('/profile')
+          setUser(me)
+        } catch {
+          setToken(null) // token invalid or expired
+        }
+      }
       setLoading(false)
-    })
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
-    })
-
-    return () => listener.subscription.unsubscribe()
+    }
+    init()
   }, [])
+
+  function handleAuthed(u: AppUser) {
+    setUser(u)
+    setAuthMode(null)
+  }
 
   if (loading) {
     return (
@@ -39,9 +48,15 @@ export default function App() {
     )
   }
 
-  if (!session) {
+  if (!user) {
     if (authMode) {
-      return <Auth initialMode={authMode} onBack={() => setAuthMode(null)} />
+      return (
+        <Auth
+          initialMode={authMode}
+          onBack={() => setAuthMode(null)}
+          onAuthed={handleAuthed}
+        />
+      )
     }
     return (
       <Landing
@@ -55,19 +70,19 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route element={<Layout />}>
-          <Route index element={<Applications user={session.user} />} />
+          <Route index element={<Applications user={user as any} />} />
           <Route
-            path="candidatures/:id"
-            element={<ApplicationDetail user={session.user} />}
+            path="applications/:id"
+            element={<ApplicationDetail user={user as any} />}
           />
-          <Route path="entreprises" element={<Companies user={session.user} />} />
+          <Route path="companies" element={<Companies user={user as any} />} />
           <Route
-            path="entreprises/:id"
-            element={<CompanyDetail user={session.user} />}
+            path="companies/:id"
+            element={<CompanyDetail user={user as any} />}
           />
-          <Route path="questions" element={<Questions user={session.user} />} />
-          <Route path="ia" element={<Analysis user={session.user} />} />
-          <Route path="profil" element={<Profile user={session.user} />} />
+          <Route path="questions" element={<Questions user={user as any} />} />
+          <Route path="analysis" element={<Analysis user={user as any} />} />
+          <Route path="profile" element={<Profile user={user as any} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

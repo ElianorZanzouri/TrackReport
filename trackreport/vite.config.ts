@@ -41,21 +41,6 @@ export default defineConfig({
         // Cache external resources used during navigation.
         runtimeCaching: [
           {
-            // Supabase reads: network first, then cache when offline.
-            urlPattern: /^https:\/\/[a-z0-9-]+\.supabase\.co\/rest\/v1\/.*/i,
-            handler: 'NetworkFirst',
-            method: 'GET',
-            options: {
-              cacheName: 'supabase-data',
-              networkTimeoutSeconds: 4,
-              expiration: {
-                maxEntries: 300,
-                maxAgeSeconds: 60 * 60 * 24 * 7, // 7 jours
-              },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-          {
             // Feuilles de style Google Fonts.
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             handler: 'StaleWhileRevalidate',

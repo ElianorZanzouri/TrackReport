@@ -1,6 +1,6 @@
-import type { User } from '@supabase/supabase-js'
 import Analyzer from './Analyzer'
 
+type User = { id: string; email: string }
 type Props = { user: User }
 
 export default function Analysis({ user }: Props) {

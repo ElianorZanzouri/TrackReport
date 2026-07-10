@@ -6,7 +6,7 @@ export const profileRouter = Router()
 
 profileRouter.use(requireAuth)
 
-// --- Lire mon profil ---
+// --- Read my profile ---
 profileRouter.get('/', async (req: AuthRequest, res) => {
   try {
     const result = await pool.query(
@@ -14,16 +14,16 @@ profileRouter.get('/', async (req: AuthRequest, res) => {
       [req.userId]
     )
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Profil introuvable.' })
+      return res.status(404).json({ error: 'Profile not found.' })
     }
     res.json(result.rows[0])
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: 'Erreur serveur.', detail: String(err) })
+    res.status(500).json({ error: 'Server error.', detail: String(err) })
   }
 })
 
-// --- Mettre à jour mon profil ---
+// --- Update my profile ---
 profileRouter.patch('/', async (req: AuthRequest, res) => {
   try {
     const { full_name, about } = req.body
@@ -38,6 +38,6 @@ profileRouter.patch('/', async (req: AuthRequest, res) => {
     res.json(result.rows[0])
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: 'Erreur serveur.', detail: String(err) })
+    res.status(500).json({ error: 'Server error.', detail: String(err) })
   }
 })

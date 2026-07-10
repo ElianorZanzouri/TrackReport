@@ -6,7 +6,7 @@ export const historiesRouter = Router()
 
 historiesRouter.use(requireAuth)
 
-// --- Lister l'historique (filtrable par candidature) ---
+// --- List history (filterable by application) ---
 historiesRouter.get('/', async (req: AuthRequest, res) => {
   try {
     const { application_id } = req.query
@@ -24,22 +24,28 @@ historiesRouter.get('/', async (req: AuthRequest, res) => {
     res.json(result.rows)
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: 'Erreur serveur.', detail: String(err) })
+    res.status(500).json({ error: 'Server error.', detail: String(err) })
   }
 })
 
-// --- Ajouter une entrée d'historique ---
+// --- Add a history entry ---
 historiesRouter.post('/', async (req: AuthRequest, res) => {
   try {
-    const { application_id, status, reason } = req.body
+    const { id, application_id, status, reason, date_updated } = req.body
     if (!application_id || !status) {
       return res.status(400).json({ error: 'application_id et status requis.' })
     }
     const result = await pool.query(
-      `insert into histories_status (user_id, application_id, status, reason)
-       values ($1, $2, $3::application_status, $4)
+      `insert into histories_status (id, user_id, application_id, status, date_updated, reason)
+       values (coalesce($1, gen_random_uuid()), $2, $3, $4::application_status,
+               coalesce($5, now()), $6)
+       on conflict (id) do update set
+         status       = excluded.status,
+         reason       = excluded.reason,
+         date_updated = excluded.date_updated
+       where histories_status.user_id = excluded.user_id
        returning *`,
-      [req.userId, application_id, status, reason ?? null]
+      [id ?? null, req.userId, application_id, status, date_updated ?? null, reason ?? null]
     )
     res.json(result.rows[0])
   } catch (err) {

@@ -1,29 +1,29 @@
 import type { Request, Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
 
-// On ajoute un champ "userId" à la requête, pour le transmettre aux routes.
+// We add a "userId" field to the request to pass it to the routes.
 export interface AuthRequest extends Request {
   userId?: string
 }
 
 export function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
-  // 1. Récupérer le jeton depuis l'en-tête "Authorization: Bearer <token>".
+  // 1. Get the token from the "Authorization: Bearer <token>" header.
   const header = req.headers.authorization
   const token = header?.startsWith('Bearer ') ? header.slice(7) : null
 
   if (!token) {
-    return res.status(401).json({ error: 'Jeton manquant.' })
+    return res.status(401).json({ error: 'Token missing.' })
   }
 
   try {
-    // 2. Vérifier le jeton et en extraire l'identifiant utilisateur.
+    // 2. Verify the token and extract the user identifier.
     const payload = jwt.verify(token, process.env.JWT_SECRET as string) as {
       sub: string
     }
     req.userId = payload.sub
-    // 3. Tout est bon : on laisse passer vers la route.
+    // 3. All good: let it pass to the route.
     next()
   } catch {
-    return res.status(401).json({ error: 'Jeton invalide ou expiré.' })
+    return res.status(401).json({ error: 'Token invalid or expired.' })
   }
 }

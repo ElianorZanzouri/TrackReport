@@ -11,11 +11,12 @@ import { historiesRouter } from './histories.js'
 import { interviewsRouter } from './interviews.js'
 import { profileRouter } from './profile.js'
 import { analyzeRouter } from './analyze.js'
+import 'dotenv/config'
 
 const app = express()
 
 app.use(cors())
-app.use(express.json())
+app.use(express.json({ limit: '25mb' }))
 
 // Routes
 app.use('/auth', authRouter)
@@ -27,7 +28,7 @@ app.use('/interviews', interviewsRouter)
 app.use('/profile', profileRouter)
 app.use('/analyze', analyzeRouter)
 
-// Route de test : le serveur répond-il ?
+// Test route: does the server respond?
 app.get('/health', (_req, res) => {
   res.json({
     ok: true,
@@ -36,18 +37,18 @@ app.get('/health', (_req, res) => {
   })
 })
 
-// Route de test : la base de données répond-elle ?
+// Test route: does the database respond?
 app.get('/db-test', async (_req, res) => {
   try {
     const result = await pool.query('SELECT NOW()')
     res.json({ ok: true, dbTime: result.rows[0].now })
   } catch (err) {
-    console.error('Erreur base de données :', err)
+    console.error('Database error:', err)
     res.status(500).json({ ok: false, error: String(err) })
   }
 })
 
-// Route de test
+// Test route
 app.get('/me', requireAuth, (req: AuthRequest, res) => {
   res.json({ userId: req.userId })
 })

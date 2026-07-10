@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import type { User } from '@supabase/supabase-js'
 import { db, type Contact, type Company } from '../db'
 import { localInsert, localUpdate, localDelete } from '../sync'
 import { statusInfo } from '../Status'
+import { uuid } from '../uuid'
 
+type User = { id: string; email: string }
 type Props = { user: User }
 
 type AppRow = { id: string; position: string; status_actuel: string }
@@ -132,7 +133,7 @@ export default function CompanyDetail({ user }: Props) {
         await localUpdate('contacts', editingId, fields)
       } else {
         await localInsert('contacts', {
-          id: crypto.randomUUID(),
+          id: uuid(),
           user_id: user.id,
           company_id: id,
           created_at: new Date().toISOString(),

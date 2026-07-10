@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import type { User } from '@supabase/supabase-js'
 import { db } from '../db'
 import { localInsert } from '../sync'
 
+type User = { id: string; email: string }
 type ProfileProps = { user: User }
 
 export default function Profile({ user }: ProfileProps) {

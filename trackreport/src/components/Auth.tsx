@@ -1,13 +1,16 @@
 import { useState } from 'react'
-import { supabase } from '../supabaseClient'
+import { apiPost, setToken } from '../api'
+
+type AuthUser = { id: string; email: string; full_name?: string | null }
 
 type AuthProps = {
   initialMode?: 'signin' | 'signup'
   onBack?: () => void
+  onAuthed: (user: AuthUser) => void
 }
 
 // Sign-in/sign-up screen, aligned with the landing page design.
-export default function Auth({ initialMode = 'signin', onBack }: AuthProps) {
+export default function Auth({ initialMode = 'signin', onBack, onAuthed }: AuthProps) {
   const [mode, setMode] = useState<'signin' | 'signup'>(initialMode)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -21,22 +24,14 @@ export default function Auth({ initialMode = 'signin', onBack }: AuthProps) {
     setLoading(true)
     setMessage(null)
 
-    if (mode === 'signup') {
-      const { error } = await supabase.auth.signUp({ email, password })
-      if (error) {
-        setMessage({ type: 'error', text: error.message })
-      } else {
-        setMessage({
-          type: 'success',
-          text: 'Account created! You can now sign in.',
-        })
-        setMode('signin')
-      }
-    } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) {
-        setMessage({ type: 'error', text: error.message })
-      }
+    try {
+      const path = mode === 'signup' ? '/auth/register' : '/auth/login'
+      const data = await apiPost(path, { email, password })
+      // The server returns { token, user }: we store the token and log in.
+      setToken(data.token)
+      onAuthed(data.user)
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message ?? String(err) })
     }
 
     setLoading(false)

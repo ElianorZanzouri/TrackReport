@@ -4,10 +4,10 @@ import { requireAuth, type AuthRequest } from './middleware.js'
 
 export const applicationsRouter = Router()
 
-// Toutes les routes ci-dessous exigent un utilisateur connecté.
+// All routes below require a logged-in user.
 applicationsRouter.use(requireAuth)
 
-// --- Lister mes candidatures ---
+// --- List my applications ---
 applicationsRouter.get('/', async (req: AuthRequest, res) => {
   try {
     const result = await pool.query(
@@ -17,16 +17,16 @@ applicationsRouter.get('/', async (req: AuthRequest, res) => {
     res.json(result.rows)
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: 'Erreur serveur.' })
+    res.status(500).json({ error: 'Server error.' })
   }
 })
 
-// --- Créer une candidature ---
+// --- Create an application ---
 applicationsRouter.post('/', async (req: AuthRequest, res) => {
   try {
     const { company_id, position, description, status_actuel, date_update } = req.body
     if (!position) {
-      return res.status(400).json({ error: 'Le poste est requis.' })
+      return res.status(400).json({ error: 'Position is required.' })
     }
     const result = await pool.query(
       `insert into applications
@@ -39,11 +39,11 @@ applicationsRouter.post('/', async (req: AuthRequest, res) => {
     res.json(result.rows[0])
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: 'Erreur serveur.', detail: String(err) })
+    res.status(500).json({ error: 'Server error.', detail: String(err) })
   }
 })
 
-// --- Modifier une candidature ---
+// --- Update an application ---
 applicationsRouter.patch('/:id', async (req: AuthRequest, res) => {
   try {
     const { position, description, status_actuel, date_update, company_id } = req.body
@@ -60,16 +60,16 @@ applicationsRouter.patch('/:id', async (req: AuthRequest, res) => {
        date_update ?? null, company_id ?? null, req.params.id, req.userId]
     )
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Candidature introuvable.' })
+      return res.status(404).json({ error: 'Application not found.' })
     }
     res.json(result.rows[0])
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: 'Erreur serveur.' })
+    res.status(500).json({ error: 'Server error.' })
   }
 })
 
-// --- Supprimer une candidature ---
+// --- Delete an application ---
 applicationsRouter.delete('/:id', async (req: AuthRequest, res) => {
   try {
     const result = await pool.query(
@@ -77,11 +77,11 @@ applicationsRouter.delete('/:id', async (req: AuthRequest, res) => {
       [req.params.id, req.userId]
     )
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Candidature introuvable.' })
+      return res.status(404).json({ error: 'Application not found.' })
     }
     res.json({ ok: true, id: result.rows[0].id })
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: 'Erreur serveur.' })
+    res.status(500).json({ error: 'Server error.' })
   }
 })

@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import type { User } from '@supabase/supabase-js'
 import { db, type HistoryStatus } from '../db'
 import { localInsert, localUpdate } from '../sync'
 import { STATUS, statusInfo } from '../Status'
 import Analyzer from './Analyzer'
+import { uuid } from '../uuid'
 
+type User = { id: string; email: string }
 type Props = { user: User }
 
 type AppView = {
@@ -73,7 +74,7 @@ export default function ApplicationDetail({ user }: Props) {
     try {
       const nowISO = new Date().toISOString()
       await localInsert('histories_status', {
-        id: crypto.randomUUID(),
+        id: uuid(),
         user_id: user.id,
         application_id: id,
         status: newStatus,

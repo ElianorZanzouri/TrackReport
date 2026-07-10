@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
-import { supabase } from '../supabaseClient'
+import { setToken } from '../api'
 import { syncSoon, pendingCount } from '../sync'
 
 export default function Layout() {
@@ -65,17 +65,17 @@ export default function Layout() {
 
         <nav className="trl-links">
           <NavLink to="/" end className={linkClass}>Applications</NavLink>
-          <NavLink to="/entreprises" className={linkClass}>Companies</NavLink>
+          <NavLink to="/companies" className={linkClass}>Companies</NavLink>
           <NavLink to="/questions" className={linkClass}>Questions</NavLink>
-          <NavLink to="/ia" className={linkClass}>AI</NavLink>
-          <NavLink to="/profil" className={linkClass}>Profile</NavLink>
+          <NavLink to="/analysis" className={linkClass}>AI</NavLink>
+          <NavLink to="/profile" className={linkClass}>Profile</NavLink>
         </nav>
 
         {(syncing || pending > 0) && (
           <button
             className="trl-sync"
             onClick={() => syncSoon()}
-            title="Cliquer pour synchroniser maintenant"
+            title="Click to sync now"
           >
             {syncing ? (
               <>
@@ -91,7 +91,13 @@ export default function Layout() {
           </button>
         )}
 
-        <button className="trl-signout" onClick={() => supabase.auth.signOut()}>
+        <button
+          className="trl-signout"
+          onClick={() => {
+            setToken(null)
+            location.reload()
+          }}
+        >
           Sign out
         </button>
       </header>

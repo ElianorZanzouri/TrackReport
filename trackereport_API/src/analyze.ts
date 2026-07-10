@@ -20,31 +20,32 @@ const responseSchema = {
   required: ['score', 'summary', 'strengths', 'gaps', 'questions', 'advice'],
 }
 
-const PROMPT = `Tu es un coach en recrutement bienveillant et précis.
-À partir du CV fourni (en PDF) et de la description de poste ci-dessous,
-évalue la compatibilité du candidat avec le poste.
+const PROMPT = `You are a kind and precise recruitment coach.
+Based on the CV provided (in PDF) and the job description below,
+evaluate the candidate's fit for the position.
 
-Réponds en français, de façon concrète et utile. Fournis :
-- score : un entier de 0 à 100 (compatibilité globale)
-- summary : 2-3 phrases de synthèse
-- strengths : les atouts du profil pour CE poste
-- gaps : les écarts ou compétences manquantes à combler
-- questions : des questions probables en entretien pour ce poste
-- advice : des conseils pour adapter la candidature
+Respond in English, in a concrete and useful way. Provide:
+- score: an integer from 0 to 100 (overall fit)
+- summary: 2-3 summary sentences
+- strengths: the profile's assets for THIS position
+- gaps: gaps or missing skills to fill
+- questions: likely interview questions for this position
+- advice: tips to tailor the application
 
-Description du poste :
+Job description:
 `
 
 analyzeRouter.post('/', async (req: AuthRequest, res) => {
   try {
     const apiKey = process.env.GEMINI_API_KEY
+    console.log('GEMINI présent ?', apiKey ? 'oui' : 'NON')
     if (!apiKey) {
-      return res.status(500).json({ error: 'Clé GEMINI_API_KEY manquante.' })
+      return res.status(500).json({ error: 'GEMINI_API_KEY missing.' })
     }
 
     const { jobDescription, cvBase64, cvMimeType } = req.body
     if (!jobDescription || !cvBase64) {
-      return res.status(400).json({ error: 'Description du poste et CV requis.' })
+      return res.status(400).json({ error: 'Job description and CV required.' })
     }
 
     const geminiRes = await fetch(
@@ -71,18 +72,18 @@ analyzeRouter.post('/', async (req: AuthRequest, res) => {
 
     if (!geminiRes.ok) {
       const detail = await geminiRes.text()
-      return res.status(502).json({ error: 'Erreur Gemini', detail })
+      return res.status(502).json({ error: 'Gemini error', detail })
     }
 
     const data = await geminiRes.json()
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text
     if (!text) {
-      return res.status(502).json({ error: 'Réponse vide de Gemini.' })
+      return res.status(502).json({ error: 'Empty response from Gemini.' })
     }
 
     res.json(JSON.parse(text))
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: 'Erreur serveur.', detail: String(err) })
+    res.status(500).json({ error: 'Server error.', detail: String(err) })
   }
 })
